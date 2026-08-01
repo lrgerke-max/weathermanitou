@@ -151,6 +151,21 @@ async function snapshot(days) {
     const day = await readJson(`obs/${date}.json`);
     if (day) files[`obs/${date}.json`] = day;
   }
+
+  // Lightning rides along when a detector is archiving; the dashboard hides
+  // those pieces on its own when the files are absent.
+  const boltIndex = await readJson('lightning/index.json');
+  if (boltIndex?.days?.length) {
+    const boltDays = boltIndex.days.slice(-days);
+    files['lightning/index.json'] = { ...boltIndex, days: boltDays };
+    files['lightning/daily.json'] = await readJson('lightning/daily.json') || { days: [] };
+    files['lightning/latest.json'] = await readJson('lightning/latest.json');
+    for (const date of boltDays) {
+      const day = await readJson(`lightning/${date}.json`);
+      if (day) files[`lightning/${date}.json`] = day;
+    }
+  }
+
   return { files, index, embedded };
 }
 

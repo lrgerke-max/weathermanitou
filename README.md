@@ -68,6 +68,43 @@ Two things to know:
 - Scheduled runs are best-effort and often late by several minutes. That's fine
   here, and it's why the archiver pulls a window rather than a single reading.
 
+## Lightning
+
+Weather Underground's PWS API carries **no lightning fields at all**, so this
+cannot come from the same place as the observations. Where it comes from
+instead, and why:
+
+| Source | Verdict |
+|---|---|
+| **The station's own detector** (Ecowitt WH57, or the equivalent on an Ambient console), read from the vendor's cloud API | **What this uses.** It is your yard, not a regional average, and the vendor reports a strike *counter* rather than a stream — so a 15-minute poll misses nothing. |
+| [Blitzortung](https://www.blitzortung.org/) / lightningmaps | Free and excellent coverage, but its [terms](https://docs.lightningmaps.org/) restrict use to project participants, forbid storm-warning use outright, and require third-party apps to serve data from their own servers rather than connecting to Blitzortung's. Not something to ship in a dashboard. |
+| **GOES-19 GLM** (satellite lightning mapper) on the [NOAA AWS open bucket](https://catalog.data.gov/dataset/noaa-goes-r-series-geostationary-lightning-mapper-glm-level-2-lightning-detection-events-groups3) | Public domain, no key, 30–60 s latency, hemisphere-wide. The real option if you ever want *area* coverage rather than your own yard — but it is netCDF every 20 seconds, so it needs a parser and far more machinery than a scheduled poll. |
+| Vaisala NLDN, Earth Networks | Commercial licensing. |
+
+Configure whichever console you have — the archiver picks it up automatically
+and exits quietly when neither is set:
+
+```bash
+# Ecowitt (GW1000/GW1100/GW2000 gateways, WH57 sensor)
+export ECOWITT_APPLICATION_KEY=… ECOWITT_API_KEY=… ECOWITT_MAC=…
+
+# or Ambient Weather
+export AMBIENT_APPLICATION_KEY=… AMBIENT_API_KEY=…   # AMBIENT_MAC optional
+
+node weather/tools/lightning-archive.mjs
+```
+
+Add the same names as repository secrets for the scheduled workflow.
+
+Both vendors report the same three things: a strike counter that resets at local
+midnight, the time of the last strike, and its distance. **Not** individual
+strike coordinates — so the dashboard shows counts, timing and distance, and
+does not pretend to a map or a bearing it has no data for.
+
+Readings are stored only when they change, so a quiet week costs a handful of
+rows rather than one per poll, and each day's first sample is always kept so a
+strike-free day still records that the detector was watching.
+
 ## Data layout
 
 ```
@@ -76,7 +113,12 @@ weather/data/
   daily.json            one rollup row per day — drives the long-range charts
   latest.json           newest observation, today's rollup, station description
   index.json            which days exist, for the dashboard to discover
+  lightning/            the same four shapes, from the detector (see above)
 ```
+
+Lightning lives in its own tree because it comes from a different provider on a
+different cadence: the observation archive must not gain or lose days depending
+on whether a detector happens to be configured.
 
 Observations are normalised to one flat record shape regardless of which
 endpoint they came from, in imperial units (°F, mph, inHg, in, W/m²):
@@ -135,8 +177,12 @@ and a light/dark palette validated for colour-vision deficiency (categorical
 slots for the multi-series charts, an ordinal one-hue ramp for the rose's speed
 bins).
 
-Solar and UV disappear by themselves on a station that doesn't report them,
-rather than showing a row of dashes.
+A ninth card, **Lightning**, appears when a detector is archiving: strikes per
+hour or per day, a rail cell with today's count and the last strike's distance
+and age, and closest-strike and total-strikes entries in the extremes panel.
+
+Solar, UV and lightning disappear by themselves on a station that doesn't report
+them, rather than showing a row of dashes.
 
 ## Ideas this sets up
 

@@ -232,6 +232,165 @@ export async function updateIndex(station) {
   return days;
 }
 
+// ─────────────────────────── lightning ───────────────────────────
+//
+// Kept in its own tree under data/lightning/ because it comes from a different
+// provider on a different cadence: the observation archive must not gain or
+// lose days depending on whether a lightning detector happens to be configured.
+
+const LIGHTNING_DIR = join(DATA_DIR, 'lightning');
+
+/**
+ * The station's UTC offset in minutes, taken from the observation archive.
+ *
+ * The strike counter resets at *station-local* midnight, but this runs in CI
+ * under UTC, so bucketing by the runner's date would split a storm across two
+ * days. The WU payload carries both a local and a UTC timestamp, which is
+ * exactly the offset needed. Falls back to UTC when nothing is archived yet.
+ */
+async function stationOffsetMinutes() {
+  const latest = await readJson(join(DATA_DIR, 'latest.json'), null);
+  const observation = latest?.observation;
+  if (!observation?.local || !observation?.epoch) return 0;
+  const asIfUtc = Date.parse(`${observation.local.replace(' ', 'T')}Z`);
+  if (Number.isNaN(asIfUtc)) return 0;
+  return Math.round((asIfUtc / 1000 - observation.epoch) / 60);
+}
+
+const localDateFor = (epoch, offsetMinutes) =>
+  new Date((epoch + offsetMinutes * 60) * 1000).toISOString().slice(0, 10);
+
+/** Append one lightning reading to its station-local day. */
+export async function mergeLightning(station, reading) {
+  const offset = await stationOffsetMinutes();
+  const date = localDateFor(reading.epoch, offset);
+  const path = join(LIGHTNING_DIR, `${date}.json`);
+  const existing = await readJson(path, null);
+  const samples = existing?.samples || [];
+
+  const last = samples[samples.length - 1];
+  const unchanged = last
+    && last.countToday === reading.countToday
+    && last.lastStrikeEpoch === reading.lastStrikeEpoch
+    && last.lastDistanceMi === reading.lastDistanceMi;
+
+  // A quiet sky produces an identical reading every run. Storing one row per
+  // poll would bloat the archive with nothing, so only changes are kept — but
+  // the first sample of each day is always written, so a day with no strikes
+  // still records that the detector was up and watching.
+  if (unchanged && existing) return { date, changed: false };
+
+  samples.push({
+    epoch: reading.epoch,
+    countToday: reading.countToday,
+    lastStrikeEpoch: reading.lastStrikeEpoch,
+    lastDistanceMi: reading.lastDistanceMi,
+  });
+
+  await writeJson(path, { station, date, provider: reading.provider, units: 'imperial', samples });
+  return { date, changed: true };
+}
+
+/** One day of lightning samples → its summary row. */
+export function summariseLightning(date, samples, offsetMinutes) {
+  // Strikes are the sum of the counter's positive increments, not its daily
+  // high-water mark. A counter that has not reset yet still reads yesterday's
+  // total, and taking the maximum would credit those strikes to today as well;
+  // increments simply see a flat counter and score it zero. It also matches how
+  // the dashboard derives its per-hour bars, so the two never disagree.
+  let strikes = 0;
+  let previous = null;
+  for (const sample of samples) {
+    const count = sample.countToday;
+    if (count === null || count === undefined) continue;
+    if (previous !== null && count > previous) strikes += count - previous;
+    previous = count;
+  }
+
+  let closest = null;
+  let lastStrikeAt = null;
+  for (const sample of samples) {
+    if (!sample.lastStrikeEpoch) continue;
+    // The "last strike" fields can still describe yesterday's storm, so only
+    // count a strike towards this day when it actually happened on it.
+    if (localDateFor(sample.lastStrikeEpoch, offsetMinutes) !== date) continue;
+    if (lastStrikeAt === null || sample.lastStrikeEpoch > lastStrikeAt) {
+      lastStrikeAt = sample.lastStrikeEpoch;
+    }
+    const distance = sample.lastDistanceMi;
+    if (distance === null || distance === undefined) continue;
+    if (!closest || distance < closest.mi) closest = { mi: distance, at: sample.lastStrikeEpoch };
+  }
+
+  return {
+    date,
+    strikes,
+    closestMi: closest?.mi ?? null,
+    closestAt: closest?.at ?? null,
+    lastStrikeAt,
+    samples: samples.length,
+  };
+}
+
+export async function updateLightningDaily(dates) {
+  const offset = await stationOffsetMinutes();
+  const path = join(LIGHTNING_DIR, 'daily.json');
+  const existing = await readJson(path, { days: [] });
+  const byDate = new Map((existing.days || []).map((day) => [day.date, day]));
+
+  for (const date of dates) {
+    const day = await readJson(join(LIGHTNING_DIR, `${date}.json`), null);
+    if (day?.samples?.length) byDate.set(date, summariseLightning(date, day.samples, offset));
+  }
+
+  const days = [...byDate.values()].sort((a, b) => a.date.localeCompare(b.date));
+  await writeJson(path, { units: 'imperial', days });
+  return days;
+}
+
+export async function updateLightningIndex(station, provider) {
+  let files = [];
+  try {
+    files = await readdir(LIGHTNING_DIR);
+  } catch (err) {
+    if (err.code !== 'ENOENT') throw err;
+  }
+  const days = files
+    .filter((name) => /^\d{4}-\d{2}-\d{2}\.json$/.test(name))
+    .map((name) => name.slice(0, -5))
+    .sort();
+
+  await writeJson(join(LIGHTNING_DIR, 'index.json'), {
+    station,
+    provider,
+    units: 'imperial',
+    updatedAt: new Date().toISOString(),
+    firstDate: days[0] || null,
+    lastDate: days[days.length - 1] || null,
+    days,
+  });
+  return days;
+}
+
+export async function writeLightningLatest(station, reading, todayRollup) {
+  await writeJson(join(LIGHTNING_DIR, 'latest.json'), {
+    station,
+    provider: reading.provider,
+    units: 'imperial',
+    fetchedAt: new Date().toISOString(),
+    reading,
+    today: todayRollup,
+  });
+}
+
+export async function readLightningDay(date) {
+  return readJson(join(LIGHTNING_DIR, `${date}.json`), null);
+}
+
+export async function lightningLocalDate(epoch) {
+  return localDateFor(epoch, await stationOffsetMinutes());
+}
+
 export async function writeLatest(station, record, todayRollup, meta) {
   const path = join(DATA_DIR, 'latest.json');
   // Station description only comes with the current-conditions call; keep the

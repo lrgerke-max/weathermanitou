@@ -39,6 +39,38 @@ export async function loadDays(dates) {
     .flatMap((file) => file.records);
 }
 
+// ─────────────────────────── lightning ───────────────────────────
+//
+// A separate tree, and every loader tolerates its absence: most stations have
+// no detector, and the dashboard simply hides the lightning pieces when the
+// files are not there.
+
+export function loadLightningIndex() { return optional('lightning/index.json', { days: [] }); }
+export function loadLightningDaily() { return optional('lightning/daily.json', { days: [] }); }
+export function loadLightningLatest() { return optional('lightning/latest.json', null); }
+
+export async function loadLightningRange(rangeDays, index, daily) {
+  if (rangeDays > 0 && rangeDays <= 7) {
+    const dates = (index.days || []).slice(-(rangeDays + 1));
+    const files = await Promise.all(
+      dates.map((date) => optional(`lightning/${date}.json`, null))
+    );
+    const samples = files
+      .filter((file) => file && Array.isArray(file.samples))
+      .flatMap((file) => file.samples)
+      .sort((a, b) => a.epoch - b.epoch)
+      .map((sample) => ({ ...sample, x: sample.epoch * 1000 }));
+    return { mode: 'hires', points: samples };
+  }
+
+  let days = daily.days || [];
+  if (rangeDays > 0) days = days.slice(-rangeDays);
+  return {
+    mode: 'daily',
+    points: days.map((day) => ({ ...day, x: new Date(`${day.date}T12:00:00`).getTime() })),
+  };
+}
+
 const DAY_MS = 86400000;
 
 /**

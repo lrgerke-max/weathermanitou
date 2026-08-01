@@ -5,7 +5,10 @@
 // extremes, table — renders against the selected range, so those numbers always
 // agree with each other.
 
-import { loadIndex, loadDaily, loadLatest, loadRange } from './data.js';
+import {
+  loadIndex, loadDaily, loadLatest, loadRange,
+  loadLightningIndex, loadLightningDaily, loadLightningLatest, loadLightningRange,
+} from './data.js';
 import { lineChart, barChart, windRose, sparkline, legend } from './charts.js';
 import { sunTimes } from './sun.js';
 
@@ -237,7 +240,31 @@ function cell(spec) {
   return node;
 }
 
-function renderRail(latest, dayPoints) {
+/**
+ * The lightning cell. Distance is the *last* strike, not the closest — that is
+ * what the detector reports, and calling it anything else would overstate it.
+ */
+function lightningCell(lightningLatest, lightningDay) {
+  const reading = lightningLatest?.reading;
+  if (!reading) return null;
+
+  const strikes = has(reading.countToday) ? reading.countToday : 0;
+  const parts = [];
+  if (has(reading.lastDistanceMi)) parts.push(`last ${reading.lastDistanceMi.toFixed(1)} mi`);
+  if (reading.lastStrikeEpoch) parts.push(relativeTime(reading.lastStrikeEpoch * 1000));
+
+  return cell({
+    label: 'Lightning',
+    value: `${Math.round(strikes)}`,
+    unit: strikes === 1 ? 'strike today' : 'strikes today',
+    sub: parts.length ? parts.join(' · ') : 'none detected today',
+    // The counter only climbs, so its shape over the day is the storm's shape.
+    series: (lightningDay || []).map((sample) => sample.countToday),
+    color: SERIES_2,
+  });
+}
+
+function renderRail(latest, dayPoints, lightningLatest, lightningDay) {
   const rail = document.getElementById('rail');
   rail.replaceChildren();
   const observation = latest?.observation;
@@ -306,6 +333,9 @@ function renderRail(latest, dayPoints) {
     }));
   }
 
+  const bolt = lightningCell(lightningLatest, lightningDay);
+  if (bolt) rail.append(bolt);
+
   for (const node of rail.children) node.drawSpark?.();
 }
 
@@ -344,6 +374,29 @@ function precipBuckets(points, unit) {
   return [...buckets.entries()].sort((a, b) => a[0] - b[0]).map(([x, v]) => ({ x, v }));
 }
 
+/**
+ * Strikes per hour or per day, from the detector's cumulative daily counter —
+ * the same shape as rainfall: differences between samples, with a decrease
+ * meaning the local-midnight reset rather than negative lightning.
+ */
+function strikeBuckets(samples, unit) {
+  const buckets = new Map();
+  let previous = null;
+  for (const sample of samples) {
+    const count = sample.countToday;
+    if (!has(count)) continue;
+    if (previous !== null && count >= previous) {
+      const start = new Date(sample.x);
+      if (unit === 'day') start.setHours(0, 0, 0, 0);
+      else start.setMinutes(0, 0, 0);
+      const key = start.getTime();
+      buckets.set(key, (buckets.get(key) || 0) + (count - previous));
+    }
+    previous = count;
+  }
+  return [...buckets.entries()].sort((a, b) => a[0] - b[0]).map(([x, v]) => ({ x, v }));
+}
+
 const speedBin = (mph) => {
   for (let i = 0; i < WIND_EDGES.length; i += 1) if (mph < WIND_EDGES[i]) return i;
   return WIND_EDGES.length;
@@ -376,11 +429,16 @@ function roseData(slice) {
   return { sectors, calm, total };
 }
 
-function renderCharts(slice) {
+function renderCharts(slice, lightning) {
   const hires = slice.mode === 'hires';
   const points = slice.points;
   const span = points.length > 1 ? points[points.length - 1].x - points[0].x : 0;
   const xFormat = axisFormatter(slice.mode, span);
+
+  // A bar covering a whole day is labelled with the date alone: the bucket
+  // starts at local midnight, and showing "12:00 AM" would read as a time the
+  // measurement belongs to rather than the day it sums.
+  const dayBucket = (x, full) => (full ? dateFmt.format(x) : dayFmt.format(x));
 
   // Compact end labels — the card header already states the unit.
   const endF = (v) => (has(v) ? `${v.toFixed(1)}°` : '');
@@ -506,7 +564,8 @@ function renderCharts(slice) {
   legend(precip.slot, []);
   barChart(precip.chart, {
     points: precipPoints, color: SERIES_1, name: byHour ? 'Rain this hour' : 'Rain',
-    format: inches, formatTick: (v) => v.toFixed(2), xFormat,
+    format: inches, formatTick: (v) => v.toFixed(2),
+    xFormat: byHour ? xFormat : dayBucket,
     emptyMessage: 'No rain recorded in this range.',
     ariaLabel: 'Precipitation',
   });
@@ -537,6 +596,29 @@ function renderCharts(slice) {
     emptyMessage: 'This station does not report UV.',
     ariaLabel: 'UV index over time',
   });
+
+  // ── lightning — the card only exists when a detector is archiving
+  const card = document.getElementById('card-lightning');
+  const strikePoints = lightning?.points || [];
+  card.hidden = !strikePoints.length;
+  if (strikePoints.length) {
+    const boltByHour = lightning.mode === 'hires' && span <= 1.5 * DAY_MS;
+    const buckets = lightning.mode === 'hires'
+      ? strikeBuckets(strikePoints, boltByHour ? 'hour' : 'day')
+      : strikePoints.map((day) => ({ x: day.x, v: has(day.strikes) ? day.strikes : 0 }));
+
+    const bolt = slots('chart-lightning');
+    document.getElementById('lightning-sub').textContent =
+      boltByHour ? 'strikes per hour' : 'strikes per day';
+    legend(bolt.slot, []);
+    barChart(bolt.chart, {
+      points: buckets, color: SERIES_2, name: 'Strikes',
+      format: (v) => `${Math.round(v)}`, formatTick: (v) => v.toFixed(0),
+      xFormat: boltByHour ? xFormat : dayBucket,
+      emptyMessage: 'No strikes detected in this range.',
+      ariaLabel: 'Lightning strikes over time',
+    });
+  }
 }
 
 // ─────────────────────────── extremes ───────────────────────────
@@ -599,11 +681,48 @@ function rangeExtremes(slice) {
   ];
 }
 
-function renderExtremes(slice) {
+const miles = (v) => (has(v) ? `${v.toFixed(1)} mi` : '—');
+
+/** Lightning's contribution to the extremes panel, when a detector is archiving. */
+function lightningExtremes(lightning) {
+  const points = lightning?.points || [];
+  if (!points.length) return [];
+
+  let closest = null;
+  let total = 0;
+
+  if (lightning.mode === 'hires') {
+    total = strikeBuckets(points, 'day').reduce((sum, bucket) => sum + bucket.v, 0);
+    for (const sample of points) {
+      if (!has(sample.lastDistanceMi) || !sample.lastStrikeEpoch) continue;
+      if (!closest || sample.lastDistanceMi < closest.v) {
+        closest = { v: sample.lastDistanceMi, at: sample.lastStrikeEpoch * 1000 };
+      }
+    }
+  } else {
+    for (const day of points) {
+      total += has(day.strikes) ? day.strikes : 0;
+      if (!has(day.closestMi)) continue;
+      if (!closest || day.closestMi < closest.v) {
+        const exact = has(day.closestAt);
+        closest = { v: day.closestMi, at: exact ? day.closestAt * 1000 : day.x, dayOnly: !exact };
+      }
+    }
+  }
+
+  const rows = [{
+    label: 'Strikes', got: { v: total, at: null }, format: (v) => `${Math.round(v)}`,
+  }];
+  if (closest) rows.push({ label: 'Closest strike', got: closest, format: miles });
+  return rows;
+}
+
+function renderExtremes(slice, lightning) {
   const container = document.getElementById('extremes');
   container.replaceChildren();
 
-  const rows = rangeExtremes(slice).filter((row) => row.got && has(row.got.v));
+  const rows = [...rangeExtremes(slice), ...lightningExtremes(lightning)]
+    .filter((row) => row.got && has(row.got.v));
   if (!rows.length) {
     container.append(div('empty', 'No observations in this range yet.'));
     return;
@@ -703,7 +822,10 @@ function renderTable(slice) {
 async function main() {
   initTheme();
 
-  const [index, daily, latest] = await Promise.all([loadIndex(), loadDaily(), loadLatest()]);
+  const [index, daily, latest, boltIndex, boltDaily, boltLatest] = await Promise.all([
+    loadIndex(), loadDaily(), loadLatest(),
+    loadLightningIndex(), loadLightningDaily(), loadLightningLatest(),
+  ]);
 
   const station = latest?.station || index.station;
   if (station) {
@@ -725,8 +847,9 @@ async function main() {
 
   // The "now" block is always the last 24 hours, whatever range is selected.
   const daySlice = await loadRange(1, index, daily);
+  const boltDay = await loadLightningRange(1, boltIndex, boltDaily);
   renderHero(latest, daySlice.points);
-  renderRail(latest, daySlice.points);
+  renderRail(latest, daySlice.points, boltLatest, boltDay.points);
 
   // Count archived days from the rollups: in a single-file snapshot only a few
   // days of raw observations come along, but every day's summary does.
@@ -753,10 +876,13 @@ async function main() {
     const mine = ++token;
     charts.classList.add('loading');
     extremes.classList.add('loading');
-    const slice = await loadRange(rangeDays, index, daily);
+    const [slice, bolt] = await Promise.all([
+      loadRange(rangeDays, index, daily),
+      loadLightningRange(rangeDays, boltIndex, boltDaily),
+    ]);
     if (mine !== token) return;               // a newer range won the race
-    renderCharts(slice);
-    renderExtremes(slice);
+    renderCharts(slice, bolt);
+    renderExtremes(slice, bolt);
     renderTable(slice);
     charts.classList.remove('loading');
     extremes.classList.remove('loading');
