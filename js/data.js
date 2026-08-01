@@ -4,6 +4,15 @@
 const DATA = 'data';
 
 async function json(path) {
+  // The single-file build (weather/tools/build-single.mjs) embeds the archive
+  // in the page itself, so the same dashboard runs with no server and no
+  // network — straight off a file:// URL or an email attachment.
+  const snapshot = globalThis.__WX_SNAPSHOT;
+  if (snapshot) {
+    if (!(path in snapshot)) throw new Error(`${path} is not in this snapshot`);
+    return snapshot[path];
+  }
+
   const res = await fetch(`${DATA}/${path}`, { cache: 'no-cache' });
   if (!res.ok) throw new Error(`${res.status} fetching ${path}`);
   return res.json();

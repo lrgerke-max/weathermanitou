@@ -728,10 +728,22 @@ async function main() {
   renderHero(latest, daySlice.points);
   renderRail(latest, daySlice.points);
 
+  // Count archived days from the rollups: in a single-file snapshot only a few
+  // days of raw observations come along, but every day's summary does.
   const note = document.getElementById('range-note');
-  note.textContent = index.days.length
-    ? `${index.days.length} day${index.days.length === 1 ? '' : 's'} archived · ${index.firstDate} → ${index.lastDate}`
-    : 'No archived observations yet — run weather/tools/archive.mjs.';
+  const archived = daily.days?.length || index.days.length;
+  if (!archived) {
+    note.textContent = 'No archived observations yet — run weather/tools/archive.mjs.';
+  } else {
+    const first = daily.days?.[0]?.date || index.firstDate;
+    const last = daily.days?.[daily.days.length - 1]?.date || index.lastDate;
+    const parts = [`${archived} day${archived === 1 ? '' : 's'} archived · ${first} → ${last}`];
+    if (index.snapshot) {
+      const hires = index.snapshot.observationDays;
+      parts.push(`offline snapshot · ${hires} day${hires === 1 ? '' : 's'} at full resolution`);
+    }
+    note.textContent = parts.join(' · ');
+  }
 
   const charts = document.getElementById('charts');
   const extremes = document.getElementById('extremes');

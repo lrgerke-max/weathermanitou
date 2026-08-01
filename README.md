@@ -37,7 +37,18 @@ node weather/tools/backfill.mjs --from 2025-06-01 --to 2025-08-31
 
 # View the dashboard (fetch() needs http://, so file:// won't work)
 python3 -m http.server 8000    # then open http://localhost:8000/weather/
+
+# Build one self-contained file — markup, styles, scripts and data inlined
+node weather/tools/build-single.mjs             # last 7 days at full resolution
+node weather/tools/build-single.mjs --days 30
+node weather/tools/build-single.mjs --out ~/station.html
 ```
+
+The single-file build lands in `weather/dist/` (gitignored) and needs no server
+and no network — open it straight from disk, put it on a USB stick, mail it to
+someone. Every day's *summary* always rides along, so the long ranges work in
+full; `--days` controls how much full-resolution observation data comes with it,
+which is what drives the file size (roughly 80 KB per day).
 
 `WU_STATION_ID` overrides the station if you ever point this at another one.
 
