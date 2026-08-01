@@ -11,66 +11,140 @@
 
 <div class="wrap">
 
-  <header>
-    <h1 id="station-name">Weather station</h1>
-    <span class="station-meta">
-      <span id="station-id">KMIMIDDL77</span> ·
-      <a id="wu-link" href="https://www.wunderground.com/dashboard/pws/KMIMIDDL77" rel="noreferrer">Weather Underground</a>
-    </span>
-    <span class="spacer"></span>
-    <button class="theme-toggle" id="theme-toggle" type="button">Dark</button>
+  <header class="topbar">
+    <div class="ident">
+      <h1 id="station-name">Weather station</h1>
+      <div class="ident-meta">
+        <span id="station-id">KMIMIDDL77</span>
+        <span class="sep">·</span>
+        <span id="station-place">—</span>
+        <span class="sep">·</span>
+        <a id="wu-link" href="https://www.wunderground.com/dashboard/pws/KMIMIDDL77" rel="noreferrer">wunderground</a>
+      </div>
+    </div>
+    <div class="topbar-right">
+      <div class="status" id="status">
+        <span class="status-dot" id="status-dot"></span>
+        <span id="status-text">no data</span>
+      </div>
+      <button class="ghost-btn" id="theme-toggle" type="button">Dark</button>
+    </div>
   </header>
 
-  <!-- Current conditions: one hero figure, then the supporting tiles. -->
-  <section class="now" id="now" aria-label="Current conditions">
-    <div>
-      <div class="hero-label">Temperature</div>
-      <div class="hero-value" id="hero-temp">—</div>
-      <div class="hero-sub" id="hero-time">no observations yet</div>
+  <!-- ══════════ NOW ══════════ -->
+  <section class="now" aria-label="Current conditions">
+    <div class="hero">
+      <div class="hero-figure">
+        <span class="hero-value" id="hero-temp">—</span>
+        <span class="hero-degree">°F</span>
+      </div>
+      <div class="hero-side">
+        <div class="hero-feels" id="hero-feels"></div>
+        <div class="hero-trend" id="hero-trend"></div>
+        <div class="hero-time" id="hero-time">no observations yet</div>
+      </div>
     </div>
-    <div class="tiles" id="tiles"></div>
+    <div class="hero-facts" id="hero-facts"></div>
   </section>
 
-  <!-- Filters scope every chart and the table below them. -->
+  <div class="rail-head">
+    <h2 class="section-label">Now</h2>
+    <span class="section-note">value · range today · last 24 h</span>
+  </div>
+  <section class="rail" id="rail" aria-label="Current readings"></section>
+
+  <!-- ══════════ FILTERS — scope everything below ══════════ -->
   <div class="filters" role="group" aria-label="Time range">
-    <span class="label">Range</span>
-    <button class="range-btn" type="button" data-range="1"  aria-pressed="true">24 hours</button>
-    <button class="range-btn" type="button" data-range="7"  aria-pressed="false">7 days</button>
-    <button class="range-btn" type="button" data-range="30" aria-pressed="false">30 days</button>
-    <button class="range-btn" type="button" data-range="90" aria-pressed="false">90 days</button>
-    <button class="range-btn" type="button" data-range="0"  aria-pressed="false">All</button>
+    <span class="section-label">Range</span>
+    <div class="range-group">
+      <button class="range-btn" type="button" data-range="1"  aria-pressed="true">24 h</button>
+      <button class="range-btn" type="button" data-range="7"  aria-pressed="false">7 d</button>
+      <button class="range-btn" type="button" data-range="30" aria-pressed="false">30 d</button>
+      <button class="range-btn" type="button" data-range="90" aria-pressed="false">90 d</button>
+      <button class="range-btn" type="button" data-range="365" aria-pressed="false">1 y</button>
+      <button class="range-btn" type="button" data-range="0"  aria-pressed="false">All</button>
+    </div>
     <span class="spacer"></span>
-    <span class="station-meta" id="range-note"></span>
+    <span class="section-note" id="range-note"></span>
   </div>
 
   <div class="charts" id="charts">
-    <section class="card">
-      <h2>Temperature</h2>
-      <div class="sub" id="temp-sub">°F</div>
+
+    <section class="card wide">
+      <div class="card-head">
+        <h2>Temperature</h2>
+        <span class="card-unit" id="temp-sub">°F</span>
+      </div>
       <div id="chart-temp"></div>
     </section>
 
     <section class="card">
-      <h2>Wind</h2>
-      <div class="sub">mph</div>
+      <div class="card-head">
+        <h2>Relative humidity</h2>
+        <span class="card-unit" id="humidity-sub">%</span>
+      </div>
+      <div id="chart-humidity"></div>
+    </section>
+
+    <section class="card">
+      <div class="card-head">
+        <h2>Wind speed</h2>
+        <span class="card-unit">mph</span>
+      </div>
       <div id="chart-wind"></div>
     </section>
 
     <section class="card">
-      <h2>Precipitation</h2>
-      <div class="sub" id="precip-sub">inches</div>
+      <div class="card-head">
+        <h2>Wind direction</h2>
+        <span class="card-unit" id="rose-sub">share of observations</span>
+      </div>
+      <div id="chart-rose"></div>
+    </section>
+
+    <section class="card">
+      <div class="card-head">
+        <h2>Barometric pressure</h2>
+        <span class="card-unit">inHg</span>
+      </div>
+      <div id="chart-pressure"></div>
+    </section>
+
+    <section class="card">
+      <div class="card-head">
+        <h2>Precipitation</h2>
+        <span class="card-unit" id="precip-sub">inches</span>
+      </div>
       <div id="chart-precip"></div>
     </section>
 
     <section class="card">
-      <h2>Barometric pressure</h2>
-      <div class="sub">inHg</div>
-      <div id="chart-pressure"></div>
+      <div class="card-head">
+        <h2>Solar radiation</h2>
+        <span class="card-unit">W/m²</span>
+      </div>
+      <div id="chart-solar"></div>
     </section>
+
+    <section class="card">
+      <div class="card-head">
+        <h2>UV index</h2>
+        <span class="card-unit" id="uv-sub">index</span>
+      </div>
+      <div id="chart-uv"></div>
+    </section>
+
   </div>
 
+  <!-- ══════════ EXTREMES for the selected range ══════════ -->
+  <div class="rail-head">
+    <h2 class="section-label">Extremes</h2>
+    <span class="section-note" id="extremes-note"></span>
+  </div>
+  <section class="extremes" id="extremes"></section>
+
   <details class="table-wrap" id="table-view">
-    <summary>Show data table</summary>
+    <summary>Data table</summary>
     <div class="table-scroll">
       <table id="data-table">
         <caption id="table-caption"></caption>
@@ -81,8 +155,8 @@
   </details>
 
   <footer>
-    Archived from the station's own observations. Charts read committed JSON —
-    no API key in this page.
+    Archived from the station's own observations — every value on this page comes
+    from committed JSON, with no API key in the page.
   </footer>
 
 </div>

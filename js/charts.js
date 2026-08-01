@@ -129,16 +129,21 @@ function frame(width, yDomain, formatTick) {
 
 function xTicks(svg, width, points, scaleX, xFormat) {
   const count = Math.max(2, Math.min(6, Math.floor((width - PAD.left - PAD.right) / 90)));
-  const step = Math.max(1, Math.floor((points.length - 1) / (count - 1)));
+  const last = points.length - 1;
   const seen = new Set();
-  for (let i = 0; i < points.length; i += step) {
+
+  // Space ticks over `count` divisions rather than stepping to the final point:
+  // the last point sits under the end labels and always gets dropped, which on
+  // a narrow card would otherwise leave a single lonely tick.
+  for (let k = 0; k < count; k += 1) {
+    const i = Math.round((k * last) / count);
     const label = xFormat(points[i].x);
     if (seen.has(label)) continue;
-    seen.add(label);
     const x = scaleX(points[i].x);
     if (x > width - PAD.right - 12) continue;
+    seen.add(label);
     svg.append(text(label, {
-      x, y: HEIGHT - PAD.bottom + 15, 'text-anchor': i === 0 ? 'start' : 'middle',
+      x, y: HEIGHT - PAD.bottom + 15, 'text-anchor': k === 0 ? 'start' : 'middle',
     }, 'tick-label'));
   }
 }
@@ -158,11 +163,11 @@ function reset(container) {
 }
 
 /** Re-render on container resize so text stays at its true pixel size. */
-function responsive(container, draw) {
+function responsive(container, draw, minWidth = MIN_WIDTH) {
   let queued = false;
   const run = () => {
     queued = false;
-    const width = Math.max(MIN_WIDTH, Math.floor(container.clientWidth) || MIN_WIDTH);
+    const width = Math.max(minWidth, Math.floor(container.clientWidth) || minWidth);
     container.replaceChildren(draw(width));
   };
   run();
@@ -200,7 +205,7 @@ export function lineChart(container, spec) {
   reset(container);
 
   if (!domain) {
-    container.replaceChildren(emptyState('No data in this range yet.'));
+    container.replaceChildren(emptyState(spec.emptyMessage || 'No data in this range yet.'));
     return;
   }
 
@@ -442,6 +447,161 @@ export function barChart(container, spec) {
       const i = points.findIndex((p) => p.x === x);
       return PAD.left + band * (i < 0 ? 0 : i) + band / 2;
     }, spec.xFormat);
+
+    return svg;
+  });
+}
+
+// ─────────────────────────── sparkline ───────────────────────────
+
+/**
+ * The micro-trend inside a metric cell. No axes, no labels — the cell's value
+ * carries the number, this only carries the shape.
+ *
+ * Call this only once the container is in the document: it sizes itself from
+ * the container's measured width, and an unattached element measures zero.
+ */
+export function sparkline(container, values, color) {
+  reset(container);
+  const points = values.filter((v) => typeof v === 'number' && Number.isFinite(v));
+  if (points.length < 2) {
+    container.replaceChildren();
+    return;
+  }
+
+  responsive(container, (width) => {
+    const height = 30;
+    const lo = Math.min(...points);
+    const hi = Math.max(...points);
+    const span = hi - lo || 1;
+    const x = (i) => (i / (points.length - 1)) * (width - 6) + 3;
+    const y = (v) => height - 4 - ((v - lo) / span) * (height - 8);
+
+    const svg = el('svg', {
+      class: 'spark', width, height, viewBox: `0 0 ${width} ${height}`,
+      'aria-hidden': 'true', focusable: 'false',
+    });
+    svg.append(el('path', {
+      d: points.map((v, i) => `${i ? 'L' : 'M'}${x(i).toFixed(1)},${y(v).toFixed(1)}`).join(''),
+      fill: 'none', stroke: color, 'stroke-width': '2',
+      'stroke-linejoin': 'round', 'stroke-linecap': 'round',
+    }));
+    svg.append(el('circle', {
+      cx: x(points.length - 1), cy: y(points[points.length - 1]), r: 2.5, fill: color,
+    }));
+    return svg;
+  }, 40);
+}
+
+// ─────────────────────────── wind rose ───────────────────────────
+
+const ROSE_SECTORS = 16;
+const ROSE_LABELS = ['N', 'E', 'S', 'W'];
+
+/**
+ * Where the wind actually comes from, and how hard.
+ *
+ * 16 compass sectors, each a stack of speed bins on an ordinal one-hue ramp —
+ * the bins are ordered, so the ramp is the honest encoding rather than eight
+ * competing hues. Radius is the share of observations in that direction.
+ *
+ * @param {object} spec
+ *   sectors  number[16][bins] — observation counts
+ *   bins     [{label, color}] slowest → fastest
+ *   total    total observations, for the percentages
+ */
+export function windRose(container, spec) {
+  reset(container);
+  const { sectors, bins, total } = spec;
+  if (!total) {
+    container.replaceChildren(emptyState('No wind observations in this range.'));
+    return;
+  }
+
+  const sectorTotals = sectors.map((counts) => counts.reduce((a, b) => a + b, 0));
+  const peak = Math.max(...sectorTotals, 1);
+
+  responsive(container, (width) => {
+    const size = Math.min(width, 280);
+    const svg = el('svg', {
+      class: 'chart', width, height: size, viewBox: `0 0 ${width} ${size}`,
+      role: 'img', 'aria-label': 'Wind direction frequency by speed',
+    });
+    const cx = width / 2;
+    const cy = size / 2;
+    const radius = size / 2 - 22;
+
+    const point = (deg, r) => {
+      const rad = ((deg - 90) * Math.PI) / 180;
+      return [cx + r * Math.cos(rad), cy + r * Math.sin(rad)];
+    };
+
+    // Range rings at 50% and 100% of the busiest sector, plus the cardinals.
+    for (const fraction of [0.5, 1]) {
+      svg.append(el('circle', {
+        class: 'gridline', cx, cy, r: radius * fraction, fill: 'none',
+      }));
+    }
+    ROSE_LABELS.forEach((label, i) => {
+      const [lx, ly] = point(i * 90, radius + 13);
+      svg.append(text(label, {
+        x: lx, y: ly + 4, 'text-anchor': 'middle',
+      }, 'tick-label'));
+    });
+
+    const step = 360 / ROSE_SECTORS;
+    const gap = 1.6;               // angular surface gap between neighbouring petals
+
+    sectors.forEach((counts, index) => {
+      const sectorTotal = sectorTotals[index];
+      if (!sectorTotal) return;
+
+      const a0 = index * step - step / 2 + gap / 2;
+      const a1 = index * step + step / 2 - gap / 2;
+      let inner = 0;
+
+      counts.forEach((count, bin) => {
+        if (!count) return;
+        const outer = inner + (count / peak) * radius;
+        const [x0, y0] = point(a0, inner);
+        const [x1, y1] = point(a0, outer);
+        const [x2, y2] = point(a1, outer);
+        const [x3, y3] = point(a1, inner);
+        const arcOut = `A${outer},${outer} 0 0 1 ${x2},${y2}`;
+        const arcIn = inner > 0 ? `A${inner},${inner} 0 0 0 ${x0},${y0}` : '';
+        svg.append(el('path', {
+          d: `M${x0},${y0} L${x1},${y1} ${arcOut} L${x3},${y3} ${arcIn} Z`,
+          fill: bins[bin].color,
+        }));
+        inner = outer;
+      });
+
+      // One hit target per sector, spanning the full radius.
+      const [hx0, hy0] = point(a0, 0);
+      const [hx1, hy1] = point(a0, radius);
+      const [hx2, hy2] = point(a1, radius);
+      const hit = el('path', {
+        d: `M${hx0},${hy0} L${hx1},${hy1} A${radius},${radius} 0 0 1 ${hx2},${hy2} Z`,
+        fill: 'transparent',
+      });
+      const share = (value) => `${((value / total) * 100).toFixed(1)}%`;
+      const show = (event) => showTooltip(
+        `${spec.names[index]} — ${share(sectorTotal)} of the time`,
+        counts
+          .map((count, bin) => ({ count, bin }))
+          .filter((row) => row.count > 0)
+          .reverse()
+          .map((row) => ({
+            name: bins[row.bin].label,
+            color: bins[row.bin].color,
+            value: share(row.count),
+          })),
+        event.clientX, event.clientY
+      );
+      hit.addEventListener('pointermove', show);
+      hit.addEventListener('pointerleave', hideTooltip);
+      svg.append(hit);
+    });
 
     return svg;
   });

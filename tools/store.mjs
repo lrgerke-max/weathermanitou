@@ -98,27 +98,97 @@ function mean(values) {
   return Math.round(avg * 10) / 10;
 }
 
-/** One day of observations → the summary row the dashboard charts. */
+// Wind-rose binning. The dashboard computes the same bins from raw observations
+// for short ranges — keep these edges and weather/js/app.js's WIND_BINS in step.
+const ROSE_EDGES = [5, 10, 20, 30];    // mph; a fifth bin catches everything above
+const CALM_MPH = 1;                    // below this the vane reading is meaningless
+
+function speedBin(mph) {
+  for (let i = 0; i < ROSE_EDGES.length; i += 1) if (mph < ROSE_EDGES[i]) return i;
+  return ROSE_EDGES.length;
+}
+
+/**
+ * Direction frequency by speed bin: 16 compass sectors × 5 bins.
+ *
+ * Stored per day so the rose works at any range — the raw observations are only
+ * loaded for short ranges, but direction is worth having across a season.
+ */
+function windRose(records) {
+  const sectors = Array.from({ length: 16 }, () => new Array(ROSE_EDGES.length + 1).fill(0));
+  let calm = 0;
+  let total = 0;
+  for (const record of records) {
+    if (record.windMph === null || record.windDir === null) continue;
+    total += 1;
+    if (record.windMph < CALM_MPH) { calm += 1; continue; }
+    sectors[Math.round(record.windDir / 22.5) % 16][speedBin(record.windMph)] += 1;
+  }
+  return { total, calm, sectors };
+}
+
+/** The extreme value of one field, and the epoch it happened at. */
+function peak(records, key, direction) {
+  let best = null;
+  for (const record of records) {
+    const value = record[key];
+    if (value === null || value === undefined) continue;
+    if (!best || (direction === 'max' ? value > best.v : value < best.v)) {
+      best = { v: value, at: record.epoch };
+    }
+  }
+  return best || { v: null, at: null };
+}
+
+/**
+ * One day of observations → the summary row the dashboard charts.
+ *
+ * Long ranges render from these rows rather than the raw observations, so every
+ * field the dashboard can show at full resolution has a daily counterpart here —
+ * extremes carry the time they happened, not just the number.
+ */
 export function summarise(date, records) {
-  const temps = defined(records, 'tempF');
+  const tempMax = peak(records, 'tempF', 'max');
+  const tempMin = peak(records, 'tempF', 'min');
+  const gustMax = peak(records, 'gustMph', 'max');
+
   return {
     date,
     count: records.length,
-    tempMax: max(temps),
-    tempMin: min(temps),
-    tempAvg: mean(temps),
+
+    tempMax: tempMax.v,
+    tempMaxAt: tempMax.at,
+    tempMin: tempMin.v,
+    tempMinAt: tempMin.at,
+    tempAvg: mean(defined(records, 'tempF')),
+
     dewptAvg: mean(defined(records, 'dewptF')),
+    dewptMax: max(defined(records, 'dewptF')),
+    dewptMin: min(defined(records, 'dewptF')),
+
+    heatIndexMax: max(defined(records, 'heatIndexF')),
+    windChillMin: min(defined(records, 'windChillF')),
+
     humidityAvg: mean(defined(records, 'humidity')),
+    humidityMax: max(defined(records, 'humidity')),
+    humidityMin: min(defined(records, 'humidity')),
+
     windAvg: mean(defined(records, 'windMph')),
-    gustMax: max(defined(records, 'gustMph')),
+    gustMax: gustMax.v,
+    gustMaxAt: gustMax.at,
+
     // precipTotal is a running accumulator that resets at local midnight, so the
     // day's rainfall is its high-water mark, not a sum of the samples.
     precipIn: max(defined(records, 'precipTotalIn')),
     precipRateMax: max(defined(records, 'precipRateIn')),
+
     pressureMin: min(defined(records, 'pressureIn')),
     pressureMax: max(defined(records, 'pressureIn')),
+
     solarMax: max(defined(records, 'solarWm2')),
     uvMax: max(defined(records, 'uv')),
+
+    rose: windRose(records),
   };
 }
 

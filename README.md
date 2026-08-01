@@ -87,17 +87,45 @@ Days are bucketed by **station-local** date, matching how `precipTotal` resets a
 local midnight — which is also why a day's rainfall is the high-water mark of
 that accumulator, not a sum of the samples.
 
+Each row in `daily.json` also carries the time of that day's temperature and
+gust extremes, and a `rose` object — 16 compass sectors × 5 speed bins — so the
+wind rose works across a season without loading a season of raw observations.
+
 ## Dashboard
 
-`weather/index.html`. Current conditions, then four charts scoped by one range
-filter: temperature with dew point, wind, precipitation, and pressure. Ranges up
-to 7 days draw the full-resolution observations; longer ranges switch to the
-daily rollups, because 90 days of five-minute samples is ~26,000 points fighting
-over 600 pixels.
+`weather/index.html`. The layout has one rule: **everything above the range
+filter describes now, everything below it describes the selected range.** So the
+numbers on screen always agree with each other.
 
-Charts are hand-rolled SVG with a crosshair and tooltip, keyboard access via
-arrow keys, direct end labels, a data table behind a toggle, and a light/dark
-palette validated for colour-vision deficiency.
+**Now** — the current temperature as the hero figure, with apparent temperature
+and the change over the last hour; today's high, low and peak gust each with the
+time they happened; sunrise, sunset and daylight length computed from the
+station's own coordinates. Then a rail of every live reading — dew point,
+humidity, wind, gust, pressure, rain, solar, UV — each showing the current value,
+today's range for context, and a 24-hour sparkline. A status dot reports live,
+delayed or offline from the age of the newest observation.
+
+**The selected range** — eight charts: temperature (with dew point, and apparent
+temperature drawn only across the stretches where it actually differs from the
+reading), relative humidity, wind speed, a 16-sector wind rose binned by speed,
+barometric pressure, precipitation, solar radiation and UV index. Below them, a
+panel of range extremes — each with the moment it happened — and the full data
+table.
+
+Ranges up to 7 days draw the full-resolution observations; longer ranges switch
+to the daily rollups, because 90 days of five-minute samples is ~26,000 points
+fighting over 600 pixels. Nothing is dropped in the switch: the rollups carry
+every field the high-resolution view shows, including the wind rose and the
+timestamps of each day's extremes.
+
+Charts are hand-rolled SVG — a crosshair tooltip listing every series, the same
+readout on keyboard focus via arrow keys, direct end labels, a data table twin,
+and a light/dark palette validated for colour-vision deficiency (categorical
+slots for the multi-series charts, an ordinal one-hue ramp for the rose's speed
+bins).
+
+Solar and UV disappear by themselves on a station that doesn't report them,
+rather than showing a row of dashes.
 
 ## Ideas this sets up
 
