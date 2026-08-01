@@ -1,0 +1,94 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>KMIMIDDL77 — Station Dashboard</title>
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'%3E%3Ccircle cx='8' cy='8' r='6' fill='%232a78d6'/%3E%3C/svg%3E">
+<link rel="stylesheet" href="css/dashboard.css">
+</head>
+<body>
+
+<div class="wrap">
+
+  <header>
+    <h1 id="station-name">Weather station</h1>
+    <span class="station-meta">
+      <span id="station-id">KMIMIDDL77</span> ·
+      <a id="wu-link" href="https://www.wunderground.com/dashboard/pws/KMIMIDDL77" rel="noreferrer">Weather Underground</a>
+    </span>
+    <span class="spacer"></span>
+    <button class="theme-toggle" id="theme-toggle" type="button">Dark</button>
+  </header>
+
+  <!-- Current conditions: one hero figure, then the supporting tiles. -->
+  <section class="now" id="now" aria-label="Current conditions">
+    <div>
+      <div class="hero-label">Temperature</div>
+      <div class="hero-value" id="hero-temp">—</div>
+      <div class="hero-sub" id="hero-time">no observations yet</div>
+    </div>
+    <div class="tiles" id="tiles"></div>
+  </section>
+
+  <!-- Filters scope every chart and the table below them. -->
+  <div class="filters" role="group" aria-label="Time range">
+    <span class="label">Range</span>
+    <button class="range-btn" type="button" data-range="1"  aria-pressed="true">24 hours</button>
+    <button class="range-btn" type="button" data-range="7"  aria-pressed="false">7 days</button>
+    <button class="range-btn" type="button" data-range="30" aria-pressed="false">30 days</button>
+    <button class="range-btn" type="button" data-range="90" aria-pressed="false">90 days</button>
+    <button class="range-btn" type="button" data-range="0"  aria-pressed="false">All</button>
+    <span class="spacer"></span>
+    <span class="station-meta" id="range-note"></span>
+  </div>
+
+  <div class="charts" id="charts">
+    <section class="card">
+      <h2>Temperature</h2>
+      <div class="sub" id="temp-sub">°F</div>
+      <div id="chart-temp"></div>
+    </section>
+
+    <section class="card">
+      <h2>Wind</h2>
+      <div class="sub">mph</div>
+      <div id="chart-wind"></div>
+    </section>
+
+    <section class="card">
+      <h2>Precipitation</h2>
+      <div class="sub" id="precip-sub">inches</div>
+      <div id="chart-precip"></div>
+    </section>
+
+    <section class="card">
+      <h2>Barometric pressure</h2>
+      <div class="sub">inHg</div>
+      <div id="chart-pressure"></div>
+    </section>
+  </div>
+
+  <details class="table-wrap" id="table-view">
+    <summary>Show data table</summary>
+    <div class="table-scroll">
+      <table id="data-table">
+        <caption id="table-caption"></caption>
+        <thead></thead>
+        <tbody></tbody>
+      </table>
+    </div>
+  </details>
+
+  <footer>
+    Archived from the station's own observations. Charts read committed JSON —
+    no API key in this page.
+  </footer>
+
+</div>
+
+<div class="tooltip" id="tooltip" hidden role="status" aria-live="polite"></div>
+
+<script type="module" src="js/app.js"></script>
+</body>
+</html>
