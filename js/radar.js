@@ -19,6 +19,20 @@ const BASE_TILES = 'https://basemaps.cartocdn.com/light_all';
 const ATTRIB = '© OpenStreetMap · © CARTO · radar RainViewer';
 
 const TILE = 256;
+
+/*
+ * RainViewer serves radar tiles up to zoom 7 and returns a "Zoom Level Not
+ * Supported" placeholder above it. The basemap has no such limit, and framing
+ * the 25-mile ring sensibly wants zoom 9-ish, so the two layers are drawn at
+ * different zooms: the basemap at whatever frames the ring, the radar at 7,
+ * scaled up by the power-of-two difference. Web Mercator tiles nest exactly,
+ * so a z7 tile drawn at 4x lands precisely over the four z9 tiles it contains.
+ *
+ * Little is lost to the upscale: at this latitude z7 is ~900 m per pixel,
+ * which is already about the native resolution of the underlying radar mosaic.
+ */
+const RADAR_MAX_Z = 7;
+
 const MAX_FRAMES = 10;        // ~50 minutes of history at 5-minute steps
 const FRAME_MS = 420;         // per-frame dwell
 const HOLD_MS = 1600;         // pause on the newest frame
@@ -227,12 +241,24 @@ export function initRadar({ lat, lon }, radiusMi = 25) {
     off.height = Math.round(h * dpr);
     const o = off.getContext('2d');
     o.scale(dpr, dpr);
+    // Radar is upscaled from a coarser zoom, so interpolate rather than
+    // showing the tile grid as hard squares.
+    o.imageSmoothingEnabled = true;
+    o.imageSmoothingQuality = 'high';
 
-    const n = Math.pow(2, z);
-    const x0 = Math.floor(originX / TILE);
-    const x1 = Math.floor((originX + w) / TILE);
-    const y0 = Math.floor(originY / TILE);
-    const y1 = Math.floor((originY + h) / TILE);
+    // Drop to the radar's maximum zoom and scale back up by the difference.
+    const rz = Math.min(z, RADAR_MAX_Z);
+    const scale = Math.pow(2, z - rz);
+    const rOriginX = originX / scale;
+    const rOriginY = originY / scale;
+    const rw = w / scale;
+    const rh = h / scale;
+
+    const n = Math.pow(2, rz);
+    const x0 = Math.floor(rOriginX / TILE);
+    const x1 = Math.floor((rOriginX + rw) / TILE);
+    const y0 = Math.floor(rOriginY / TILE);
+    const y1 = Math.floor((rOriginY + rh) / TILE);
 
     const jobs = [];
     for (let x = x0; x <= x1; x += 1) {
@@ -240,13 +266,19 @@ export function initRadar({ lat, lon }, radiusMi = 25) {
         if (y < 0 || y >= n) continue;
         const wrapped = ((x % n) + n) % n;
         // size/z/x/y/colour/options — scheme 4, smoothed, no snow layer.
-        jobs.push({ x, y, url: `${host}${path}/${TILE}/${z}/${wrapped}/${y}/4/1_0.png` });
+        jobs.push({ x, y, url: `${host}${path}/${TILE}/${rz}/${wrapped}/${y}/4/1_0.png` });
       }
     }
     const imgs = await Promise.all(jobs.map((j) => loadImage(j.url)));
     jobs.forEach((j, i) => {
       if (!imgs[i]) return;
-      o.drawImage(imgs[i], j.x * TILE - originX, j.y * TILE - originY, TILE, TILE);
+      o.drawImage(
+        imgs[i],
+        (j.x * TILE - rOriginX) * scale,
+        (j.y * TILE - rOriginY) * scale,
+        TILE * scale,
+        TILE * scale,
+      );
     });
     return off;
   }

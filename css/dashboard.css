@@ -92,6 +92,15 @@
 
 * { box-sizing: border-box; margin: 0; padding: 0; }
 
+/*
+ * The UA's `[hidden] { display: none }` is a low-specificity default, so any
+ * `display: flex` of ours silently beats it and `el.hidden = true` stops
+ * hiding anything. That failed quietly on the lightning summary, which kept
+ * showing a bare "0" next to "not configured" — a count of zero and no data
+ * at all read identically on the wall. Make the attribute authoritative.
+ */
+[hidden] { display: none !important; }
+
 body {
   background: var(--page);
   color: var(--text-primary);
