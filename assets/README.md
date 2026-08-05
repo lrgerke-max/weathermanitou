@@ -1,30 +1,43 @@
 # Brand assets
 
-## `ymca-logo.svg` — required, not included
+## `ymca-logo.svg`
 
-The dashboard header loads `assets/ymca-logo.svg`. That file is **not** in this
-repository and cannot be generated.
+The dashboard header loads `assets/ymca-logo.svg`. It is the official
+full-colour blue/purple mark, converted from the association's
+`ymca_blu_rgb_r.eps` (Adobe Illustrator, RGB, with the registered mark) as
+supplied from the Brand Resource Center.
 
-The Y logo is a registered trademark. The Brand Graphics Guide is explicit that
-it may not be recreated, retyped, restyled, recoloured, rotated, stretched,
-outlined, enclosed in a shape, or locked up with other words (p11–12), and that
-artwork "should not be extracted from this PDF file" (p49). So it has to be the
-official file.
+The conversion was EPS → PDF → SVG:
 
-**Download it from the Brand Resource Center** and commit it here:
-
+```bash
+gs -dNOPAUSE -dBATCH -dEPSCrop -sDEVICE=pdfwrite \
+   -dColorConversionStrategy=/LeaveColorUnchanged \
+   -sOutputFile=logo.pdf ymca_blu_rgb_r.eps
+pdftocairo -svg logo.pdf assets/ymca-logo.svg
 ```
-assets/ymca-logo.svg      full-colour version (preferred)
-```
 
-A `.png` also works — `tools/build-single.mjs` looks for `.svg` first, then
-`.png`, and inlines whichever it finds as a data URI so the offline build
-carries its own branding.
+`pdftocairo` matters here: it keeps the gradients as real vector
+`radialGradient` elements. Converting by way of a rasteriser bakes them into
+embedded bitmaps that pixelate as the logo scales up on a 1440p screen.
 
-Until the file exists the header shows a red dashed "Y logo missing" marker.
-That is deliberate. A silently blank header looks like a design decision; a
-marker does not, and nobody hangs a screen in the camp office with an obvious
-red box on it by accident.
+The artwork itself is untouched — same paths, same colours, same registered
+mark, 288 × 220.11 pt as it came. Nothing was redrawn, recoloured or retyped,
+which matters because the Y logo is a registered trademark and the Brand
+Graphics Guide forbids recreating, retyping, restyling, recolouring, rotating,
+stretching, outlining, enclosing or locking it up with other words (p11–12).
+Format conversion is not alteration; redrawing would be.
+
+**Do not** substitute artwork extracted from the Brand Graphics Guide PDF —
+p49 says explicitly that it "should not be extracted from this PDF file".
+Always start from a file supplied by the Brand Resource Center.
+
+If the file is ever removed the header shows a red dashed "Y logo missing"
+marker instead. That is deliberate. A silently blank header looks like a design
+decision; a marker does not, and nobody hangs a screen in the camp office with
+an obvious red box on it by accident.
+
+`tools/build-single.mjs` looks for `.svg` first, then `.png`, and inlines
+whichever it finds as a data URI so the offline build carries its own branding.
 
 ### Which version to use
 

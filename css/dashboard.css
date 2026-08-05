@@ -53,8 +53,10 @@
   --logo-clear: 1;
   --logo-name-gap: 1;
 
-  /* Height of the logo lockup; "the" is ~0.19 of the full logo height. */
-  --logo-h: clamp(46px, 4.2vh, 74px);
+  /* Height of the logo artwork itself (not including clear space). "the" is
+     ~0.19 of the full logo height in the official lockup, which is the unit
+     the guide defines clear space in (p13). */
+  --logo-h: clamp(44px, 5vh, 78px);
   --logo-the: calc(var(--logo-h) * 0.19);
 }
 
@@ -113,10 +115,16 @@ body {
    knockout version is not committed here, so this band stays white in both
    themes. It is a background field, not a box drawn around the mark. */
 
+/*
+ * No flex gap here. The distance between the logo and the camp name is set by
+ * --logo-name-gap alone, as padding on the mark itself — a flex gap would add
+ * to it invisibly and put the name much further out than the variable claims.
+ * .brandbar-right pushes itself away with margin-left:auto instead.
+ */
 .brandbar {
   display: flex;
   align-items: center;
-  gap: clamp(14px, 1.6vw, 30px);
+  gap: 0;
   background: var(--y-white);
   padding: calc(var(--logo-the) * var(--logo-clear))
            clamp(16px, 1.8vw, 34px);
@@ -125,8 +133,15 @@ body {
 
 .brand-lockup { display: flex; align-items: center; flex: none; }
 
-/* Clear space is enforced as real padding so nothing can crowd the mark. */
+/*
+ * Clear space is enforced as real padding so nothing can crowd the mark.
+ *
+ * content-box on purpose: the global border-box would fold the clear-space
+ * padding into --logo-h, shrinking the artwork itself and making the height
+ * variable mean something other than the height of the logo.
+ */
 .brand-logo {
+  box-sizing: content-box;
   height: var(--logo-h);
   width: auto;
   display: block;
@@ -251,7 +266,9 @@ body {
     flex: 1 1 auto;
     min-height: 0;
     grid-template-columns: minmax(300px, 19%) minmax(0, 1fr) minmax(340px, 23%);
-    grid-template-rows: minmax(0, 1.15fr) minmax(0, 1fr);
+    /* Row 1 carries the readings rail, which has a hard minimum height; the
+       charts row has slack, so the ratio favours the top. */
+    grid-template-rows: minmax(0, 1.28fr) minmax(0, 1fr);
     grid-template-areas:
       "now    radar   strikes"
       "charts charts  charts";
