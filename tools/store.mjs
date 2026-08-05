@@ -99,7 +99,7 @@ function mean(values) {
 }
 
 // Wind-rose binning. The dashboard computes the same bins from raw observations
-// for short ranges — keep these edges and weather/js/app.js's WIND_BINS in step.
+// for short ranges — keep these edges and js/app.js's WIND_BINS in step.
 const ROSE_EDGES = [5, 10, 20, 30];    // mph; a fifth bin catches everything above
 const CALM_MPH = 1;                    // below this the vane reading is meaningless
 

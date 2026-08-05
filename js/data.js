@@ -1,10 +1,10 @@
 // Loading the archive. Everything here reads static JSON committed by
-// weather/tools/archive.mjs — no API key, no server.
+// tools/archive.mjs — no API key, no server.
 
 const DATA = 'data';
 
 async function json(path) {
-  // The single-file build (weather/tools/build-single.mjs) embeds the archive
+  // The single-file build (tools/build-single.mjs) embeds the archive
   // in the page itself, so the same dashboard runs with no server and no
   // network — straight off a file:// URL or an email attachment.
   const snapshot = globalThis.__WX_SNAPSHOT;

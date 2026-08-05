@@ -1,0 +1,82 @@
+name: Archive
+
+# Pulls the PWS observations into data/ and commits them.
+#
+# Requires a repository secret named WU_API_KEY (Settings → Secrets and
+# variables → Actions). Note that GitHub only runs `schedule` triggers from the
+# repository's default branch, so this archives nothing until it lands there.
+
+on:
+  schedule:
+    # Every 15 minutes. GitHub queues scheduled runs on a best-effort basis and
+    # drops them under load — that's fine here, because each run re-pulls the
+    # whole last 24 hours, so a skipped run costs nothing.
+    - cron: '*/15 * * * *'
+  workflow_dispatch:
+    inputs:
+      backfill_days:
+        description: 'Also backfill this many days of history (0 to skip)'
+        required: false
+        default: '0'
+
+# Never let two runs commit at once; a queued run is redundant anyway.
+concurrency:
+  group: archive
+  cancel-in-progress: false
+
+jobs:
+  archive:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      - name: Backfill history
+        if: github.event_name == 'workflow_dispatch' && github.event.inputs.backfill_days != '0'
+        env:
+          WU_API_KEY: ${{ secrets.WU_API_KEY }}
+        run: node tools/backfill.mjs --days "${{ github.event.inputs.backfill_days }}"
+
+      - name: Fetch observations
+        env:
+          WU_API_KEY: ${{ secrets.WU_API_KEY }}
+        run: node tools/archive.mjs
+
+      # Weather Underground carries no lightning data, so this reads a locating
+      # network (or the station's own detector, if it has one). Exits quietly
+      # when none of these secrets are set.
+      - name: Fetch lightning
+        env:
+          XWEATHER_CLIENT_ID: ${{ secrets.XWEATHER_CLIENT_ID }}
+          XWEATHER_CLIENT_SECRET: ${{ secrets.XWEATHER_CLIENT_SECRET }}
+          ECOWITT_APPLICATION_KEY: ${{ secrets.ECOWITT_APPLICATION_KEY }}
+          ECOWITT_API_KEY: ${{ secrets.ECOWITT_API_KEY }}
+          ECOWITT_MAC: ${{ secrets.ECOWITT_MAC }}
+          AMBIENT_APPLICATION_KEY: ${{ secrets.AMBIENT_APPLICATION_KEY }}
+          AMBIENT_API_KEY: ${{ secrets.AMBIENT_API_KEY }}
+          AMBIENT_MAC: ${{ secrets.AMBIENT_MAC }}
+        run: node tools/lightning-archive.mjs
+
+      - name: Commit
+        run: |
+          set -euo pipefail
+          if [ -z "$(git status --porcelain data)" ]; then
+            echo "no new data"
+            exit 0
+          fi
+          git config user.name  "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add data
+          git commit -m "Archive weather observations $(date -u +'%Y-%m-%dT%H:%MZ')"
+          # Another run may have landed while this one was fetching.
+          for attempt in 1 2 3 4; do
+            if git push; then exit 0; fi
+            sleep $(( 2 ** attempt ))
+            git pull --rebase --autostash
+          done
+          git push

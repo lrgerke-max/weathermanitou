@@ -2,7 +2,7 @@
 //
 // Pull the station's recent observations into the archive.
 //
-//   WU_API_KEY=... node weather/tools/archive.mjs
+//   WU_API_KEY=... node tools/archive.mjs
 //
 // Run it as often as you like — every run pulls the last 24 hours at full
 // resolution and merges by timestamp, so overlapping runs are harmless and a

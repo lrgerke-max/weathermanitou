@@ -2,8 +2,8 @@
 //
 // Seed the archive with history that predates it.
 //
-//   WU_API_KEY=... node weather/tools/backfill.mjs --days 30
-//   WU_API_KEY=... node weather/tools/backfill.mjs --from 2025-01-01 --to 2025-12-31
+//   WU_API_KEY=... node tools/backfill.mjs --days 30
+//   WU_API_KEY=... node tools/backfill.mjs --from 2025-01-01 --to 2025-12-31
 //
 // One API call per day requested, paced a second apart. Days already in the
 // archive are skipped unless --force is passed.

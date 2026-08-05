@@ -1,0 +1,37 @@
+name: Tests
+
+# The archiver runs unattended every 15 minutes and commits to the repository,
+# so a break here is a break that quietly poisons the archive.
+
+on:
+  push:
+    branches-ignore: []
+    paths-ignore:
+      - 'data/**'
+  pull_request:
+  workflow_dispatch:
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      # No install step: the project has no dependencies, and the test runner
+      # is built into Node.
+      - name: Test
+        run: node --test "tests/*.test.mjs"
+
+      # The archiver and dashboard are never imported by the tests, so a syntax
+      # error in them would otherwise reach the schedule unnoticed.
+      - name: Parse every source file
+        run: |
+          set -euo pipefail
+          for file in tools/*.mjs js/*.js; do
+            node --check "$file"
+          done
+          echo "all source files parse"

@@ -4,9 +4,9 @@
 // self-contained HTML file that runs with no server and no network. Open it
 // from the desktop, put it on a USB stick, mail it to someone.
 //
-//   node weather/tools/build-single.mjs                # last 7 days at full resolution
-//   node weather/tools/build-single.mjs --days 30
-//   node weather/tools/build-single.mjs --out ~/station.html
+//   node tools/build-single.mjs                # last 7 days at full resolution
+//   node tools/build-single.mjs --days 30
+//   node tools/build-single.mjs --out ~/station.html
 //
 // Every day's *summary* is always embedded (daily.json is small), so the long
 // ranges work in full. --days controls how much full-resolution observation
@@ -124,7 +124,7 @@ async function readJson(path) {
 async function snapshot(days) {
   const index = await readJson('index.json');
   if (!index?.days?.length) {
-    throw new Error('no archived data yet — run weather/tools/archive.mjs first');
+    throw new Error('no archived data yet — run tools/archive.mjs first');
   }
 
   const daily = await readJson('daily.json') || { days: [] };

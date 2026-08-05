@@ -10,6 +10,10 @@ fine for recent dates, but an archive in the repo is permanent, queryable and
 outlives whatever the API does next. Everything else — records, alerts, forecast
 scoring — builds on it.
 
+`index.html` sits at the repository root, so **GitHub Pages serves the dashboard
+with no configuration**: Settings → Pages → deploy from the default branch, and
+the archive the workflow commits is what the page reads.
+
 ## Setup
 
 Weather Underground issues free API keys to people whose station is registered
@@ -36,7 +40,7 @@ which looks like a dashboard full of dashes rather than an error.
 actually came back:
 
 ```bash
-WU_API_KEY=… node weather/tools/doctor.mjs
+WU_API_KEY=… node tools/doctor.mjs
 ```
 
 ```
@@ -54,7 +58,7 @@ trusting anything else in this directory.
 ## Tests
 
 ```bash
-node --test "weather/tests/*.test.mjs"
+node --test "tests/*.test.mjs"
 ```
 
 No dependencies and no install — the runner is built into Node. The suite covers
@@ -65,28 +69,28 @@ every provider parser against stubbed payloads — that last group being the
 record of what we currently believe each API returns. **When a live run
 disagrees with one of those fixtures, fix the fixture and the parser together.**
 
-CI runs them on any change under `weather/`.
+CI runs them on every push.
 
 ## Commands
 
 ```bash
 # Pull the last 24 hours at full resolution and merge into the archive
-node weather/tools/archive.mjs
+node tools/archive.mjs
 
 # Seed history that predates the archive (one API call per day, paced)
-node weather/tools/backfill.mjs --days 30
-node weather/tools/backfill.mjs --from 2025-06-01 --to 2025-08-31
+node tools/backfill.mjs --days 30
+node tools/backfill.mjs --from 2025-06-01 --to 2025-08-31
 
 # View the dashboard (fetch() needs http://, so file:// won't work)
-python3 -m http.server 8000    # then open http://localhost:8000/weather/
+python3 -m http.server 8000    # then open http://localhost:8000/
 
 # Build one self-contained file — markup, styles, scripts and data inlined
-node weather/tools/build-single.mjs             # last 7 days at full resolution
-node weather/tools/build-single.mjs --days 30
-node weather/tools/build-single.mjs --out ~/station.html
+node tools/build-single.mjs             # last 7 days at full resolution
+node tools/build-single.mjs --days 30
+node tools/build-single.mjs --out ~/station.html
 ```
 
-The single-file build lands in `weather/dist/` (gitignored) and needs no server
+The single-file build lands in `dist/` (gitignored) and needs no server
 and no network — open it straight from disk, put it on a USB stick, mail it to
 someone. Every day's *summary* always rides along, so the long ranges work in
 full; `--days` controls how much full-resolution observation data comes with it,
@@ -129,7 +133,7 @@ and configure:
 
 ```bash
 export XWEATHER_CLIENT_ID=… XWEATHER_CLIENT_SECRET=…
-node weather/tools/lightning-archive.mjs --radius 150 --minutes 30
+node tools/lightning-archive.mjs --radius 150 --minutes 30
 ```
 
 Or, for a station that has its own detector instead:
@@ -156,7 +160,7 @@ individual strikes — the same trick the wind rose uses.
 ## Data layout
 
 ```
-weather/data/
+data/
   obs/YYYY-MM-DD.json   every observation for one station-local day
   daily.json            one rollup row per day — drives the long-range charts
   latest.json           newest observation, today's rollup, station description
@@ -194,7 +198,7 @@ wind rose works across a season without loading a season of raw observations.
 
 ## Dashboard
 
-`weather/index.html`. The layout has one rule: **everything above the range
+`index.html`. The layout has one rule: **everything above the range
 filter describes now, everything below it describes the selected range.** So the
 numbers on screen always agree with each other.
 

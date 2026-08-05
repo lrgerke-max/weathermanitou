@@ -2,7 +2,7 @@
 //
 // Preflight check. Run this first, from a machine with network access:
 //
-//   WU_API_KEY=… node weather/tools/doctor.mjs
+//   WU_API_KEY=… node tools/doctor.mjs
 //
 // Everything in this project was written against documented response shapes
 // rather than live payloads, so the interesting failure is not "the request
@@ -171,7 +171,7 @@ async function checkArchive() {
   section('Archive');
   const index = await readJson('index.json', null);
   if (!index?.days?.length) {
-    warn('nothing archived yet — run weather/tools/archive.mjs');
+    warn('nothing archived yet — run tools/archive.mjs');
     return;
   }
   pass(`${index.days.length} days archived, ${index.firstDate} → ${index.lastDate}`);

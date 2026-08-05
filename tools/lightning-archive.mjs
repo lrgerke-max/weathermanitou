@@ -3,7 +3,7 @@
 // Archive lightning near the station.
 //
 //   XWEATHER_CLIENT_ID=… XWEATHER_CLIENT_SECRET=… \
-//     node weather/tools/lightning-archive.mjs [--radius 150] [--minutes 30]
+//     node tools/lightning-archive.mjs [--radius 150] [--minutes 30]
 //
 // With a locating network configured this stores individual strikes; with a
 // local detector it stores counter readings instead. Exits quietly when neither
@@ -33,7 +33,7 @@ function parseArgs(argv) {
 async function archiveStrikes(args) {
   const station = await stationCoords();
   if (!station) {
-    console.warn('station coordinates unknown — run weather/tools/archive.mjs first');
+    console.warn('station coordinates unknown — run tools/archive.mjs first');
     return;
   }
 

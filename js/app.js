@@ -16,7 +16,7 @@ const SERIES_1 = 'var(--series-1)';
 const SERIES_2 = 'var(--series-2)';
 const SERIES_3 = 'var(--series-3)';
 
-// Wind-rose speed bins. Edges must match ROSE_EDGES in weather/tools/store.mjs,
+// Wind-rose speed bins. Edges must match ROSE_EDGES in tools/store.mjs,
 // which pre-computes the same bins into the daily rollups.
 const WIND_BINS = [
   { label: '0–5 mph', color: 'var(--bin-1)' },
@@ -387,7 +387,7 @@ function precipBuckets(points, unit) {
 }
 
 // Strike-distance bands for the direction rose. Edges must match STRIKE_BANDS
-// in weather/tools/store.mjs, which pre-computes the same bands per day.
+// in tools/store.mjs, which pre-computes the same bands per day.
 const STRIKE_BINS = [
   { label: '0–5 mi', color: 'var(--bin-1)' },
   { label: '5–10', color: 'var(--bin-2)' },
@@ -962,7 +962,7 @@ async function main() {
   const note = document.getElementById('range-note');
   const archived = daily.days?.length || index.days.length;
   if (!archived) {
-    note.textContent = 'No archived observations yet — run weather/tools/archive.mjs.';
+    note.textContent = 'No archived observations yet — run tools/archive.mjs.';
   } else {
     const first = daily.days?.[0]?.date || index.firstDate;
     const last = daily.days?.[daily.days.length - 1]?.date || index.lastDate;

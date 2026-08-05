@@ -241,7 +241,7 @@ async function fetchAmbient() {
 export async function fetchStrikes(station, minutes, radiusMi) {
   if (configuredProvider() !== 'xweather') return [];
   if (!Number.isFinite(station?.lat) || !Number.isFinite(station?.lon)) {
-    throw new Error('station coordinates unknown — run weather/tools/archive.mjs first');
+    throw new Error('station coordinates unknown — run tools/archive.mjs first');
   }
   return fetchXweather(station, minutes, radiusMi);
 }
