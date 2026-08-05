@@ -12,7 +12,7 @@ import {
 import { lineChart, barChart, windRose, sparkline, legend } from './charts.js';
 import { sunTimes } from './sun.js';
 import { initRadar } from './radar.js';
-import { renderStrikes } from './strikes.js';
+import { renderStrikes, lightningConfigured } from './strikes.js';
 
 /*
  * Where "here" is, for the radar centre and every lightning distance.
@@ -809,7 +809,7 @@ async function main() {
   // ── lightning panel — a week's window, so "the last five" survives a quiet
   // spell instead of emptying out every midnight.
   const boltWeek = await loadLightningRange(7, boltIndex, boltDaily);
-  const archivingLightning = Boolean(boltIndex?.days?.length || boltDaily?.days?.length);
+  const archivingLightning = lightningConfigured(boltIndex, boltDaily);
   renderStrikes(boltWeek?.strikes || [], here, {
     radiusMi: CAMP.radiusMi,
     limit: CAMP.strikeCount,
@@ -899,7 +899,7 @@ async function main() {
       renderStrikes(freshWeek?.strikes || [], here, {
         radiusMi: CAMP.radiusMi,
         limit: CAMP.strikeCount,
-        configured: Boolean(boltIndex?.days?.length || boltDaily?.days?.length)
+        configured: lightningConfigured(boltIndex, boltDaily)
           && has(here.lat) && has(here.lon),
       });
 

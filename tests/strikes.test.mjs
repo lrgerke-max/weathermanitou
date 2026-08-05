@@ -5,7 +5,9 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 
-import { haversineMi, bearingDeg, recentStrikes } from '../js/strikes.js';
+import {
+  haversineMi, bearingDeg, recentStrikes, lightningConfigured,
+} from '../js/strikes.js';
 
 const CAMP = { lat: 42.7156, lon: -85.4589 };   // Middleville, MI
 const near = (a, b, tol) => assert.ok(Math.abs(a - b) <= tol,
@@ -135,4 +137,35 @@ test('cloud-to-ground type is carried through for the display', () => {
     [at(1, CAMP.lat + 0.01, CAMP.lon, { type: 'CG' })], CAMP, 25, 5,
   );
   assert.equal(rows[0].type, 'CG');
+});
+
+// ────────────────── "configured" vs "nothing struck" ──────────────────
+//
+// The distinction the panel exists to make. Getting it backwards tells staff
+// the system is not set up at the moment it is set up and reporting all clear.
+
+test('a provider that archived a quiet day is configured, despite no days', () => {
+  // Exactly what tools/lightning-archive.mjs writes after a run with no
+  // strikes: index.json stamped with the provider, and no day files.
+  const index = { station: 'KMIMIDDL77', provider: 'xweather', days: [], firstDate: null, lastDate: null };
+  assert.equal(lightningConfigured(index, { days: [] }), true);
+});
+
+test('a detector provider counts the same way', () => {
+  assert.equal(lightningConfigured({ provider: 'ecowitt', days: [] }, { days: [] }), true);
+});
+
+test('no archive at all is not configured', () => {
+  // loadLightningIndex's fallback shape when the file is absent.
+  assert.equal(lightningConfigured({ station: null, days: [] }, { days: [] }), false);
+  assert.equal(lightningConfigured(null, null), false);
+  assert.equal(lightningConfigured(undefined, undefined), false);
+});
+
+test('archived days still count even if the index lost its provider', () => {
+  assert.equal(lightningConfigured({ days: [] }, { days: [{ date: '2026-08-05' }] }), true);
+});
+
+test('an empty provider string is not a provider', () => {
+  assert.equal(lightningConfigured({ provider: '', days: [] }, { days: [] }), false);
 });
