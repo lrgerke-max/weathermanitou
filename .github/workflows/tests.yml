@@ -17,9 +17,12 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
+      # 22, not 20: `node --test` only learned to expand glob patterns in Node
+      # 22. On 20 it reads "tests/*.test.mjs" as a literal filename, fails to
+      # find it, and exits 1 — so this job was red without ever running a test.
       - uses: actions/setup-node@v4
         with:
-          node-version: '20'
+          node-version: '22'
 
       # No install step: the project has no dependencies, and the test runner
       # is built into Node.
