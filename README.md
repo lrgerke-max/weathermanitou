@@ -101,11 +101,17 @@ node tools/build-single.mjs --days 30
 node tools/build-single.mjs --out ~/station.html
 ```
 
-The single-file build lands in `dist/` (gitignored) and needs no server
-and no network — open it straight from disk, put it on a USB stick, mail it to
-someone. Every day's *summary* always rides along, so the long ranges work in
-full; `--days` controls how much full-resolution observation data comes with it,
-which is what drives the file size (roughly 80 KB per day).
+The single-file build lands in `dist/` (gitignored) and needs no server —
+open it straight from disk, put it on a USB stick, mail it to someone. Markup,
+styles, scripts, the archive, the brand tokens and the Y logo are all inlined,
+so every reading and every colour is self-contained. Every day's *summary*
+always rides along, so the long ranges work in full; `--days` controls how much
+full-resolution observation data comes with it, which is what drives the file
+size (roughly 80 KB per day).
+
+The one thing it cannot carry offline is **radar**, which is fetched live by
+definition. With no internet the radar panel shows its "unavailable" message and
+everything else works normally.
 
 `WU_STATION_ID` overrides the station if you ever point this at another one.
 
