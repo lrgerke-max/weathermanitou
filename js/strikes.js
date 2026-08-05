@@ -77,6 +77,26 @@ function triangle(colorVar) {
 }
 
 /**
+ * Is a lightning provider actually archiving?
+ *
+ * Not the same question as "have there been strikes". tools/lightning-archive
+ * writes lightning/index.json on every successful run and stamps it with the
+ * provider it used, whether or not anything struck — so the provider field is
+ * the signal, and `days.length` is not.
+ *
+ * Reading it off days.length instead is how a working feed on a quiet day
+ * reported itself as "not configured", which is the worst thing this panel can
+ * say: it tells staff the system is not set up at the exact moment it is set
+ * up and correctly reporting nothing nearby. Most days are quiet days.
+ *
+ * loadLightningIndex falls back to an object with no provider when the file is
+ * absent, so the distinction is unambiguous.
+ */
+export function lightningConfigured(index, daily) {
+  return Boolean(index?.provider) || Boolean(daily?.days?.length);
+}
+
+/**
  * Normalise, filter to the radius and take the newest few.
  * Exported so it can be unit-tested without a DOM.
  */
