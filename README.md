@@ -117,7 +117,7 @@ everything else works normally.
 
 ## The scheduled archive
 
-`.github/workflows/weather-archive.yml` runs `archive.mjs` every 15 minutes and
+`.github/workflows/archive.yml` runs `archive.mjs` every 15 minutes and
 commits whatever is new. Each run re-pulls the whole last 24 hours and merges by
 timestamp, so overlapping runs are harmless and a run GitHub drops under load
 costs nothing — the next one catches up.
