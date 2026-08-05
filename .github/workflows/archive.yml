@@ -32,9 +32,11 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
+      # Matched to the Tests workflow so the archiver runs on the runtime the
+      # test suite actually ran against.
       - uses: actions/setup-node@v4
         with:
-          node-version: '20'
+          node-version: '22'
 
       - name: Backfill history
         if: github.event_name == 'workflow_dispatch' && github.event.inputs.backfill_days != '0'
