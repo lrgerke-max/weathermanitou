@@ -1,83 +1,91 @@
 /* ══════════════════════════════════════════════════════════
-   KMIMIDDL77 — station dashboard
-   Palette validated with the dataviz colour checks (light + dark):
-   categorical slots 1–3 and the ordinal ramp used by the wind rose.
+   YMCA Camp Manitou-Lin — station dashboard, camp-office TV build
+
+   Designed for a wall-mounted 1080p/1440p screen: one viewport, no
+   scrolling, type sized to read from across the room. Below 1280px it
+   falls back to an ordinary scrolling document, because the brand
+   standards apply on mobile and tablet too (p33).
+
+   Colour and type come from css/brand.css, which transcribes the
+   YMCA of the USA Brand Graphics Guide. Do not put non-brand colours
+   in this file.
    ══════════════════════════════════════════════════════════ */
+
+@import url("brand.css");
 
 :root {
   color-scheme: light;
 
-  --page:           #f9f9f7;
-  --surface-1:      #fcfcfb;
-  --surface-2:      #f2f1ed;
-  --text-primary:   #0b0b0b;
-  --text-secondary: #52514e;
-  --text-muted:     #898781;
-  --gridline:       #e1e0d9;
-  --axis:           #c3c2b7;
-  --border:         rgba(11, 11, 11, 0.10);
-  --wash:           rgba(11, 11, 11, 0.04);
+  /* Surfaces. Gray "complements the vibrant colors of the logo" (p32). */
+  --page:           #f2f2f2;
+  --surface-1:      var(--y-white);
+  --surface-2:      #e9e9ea;
+  --text-primary:   var(--y-black);
+  --text-secondary: var(--y-gray);
+  --text-muted:     #8a8b8d;
+  --gridline:       #dededf;
+  --axis:           #c4c5c6;
+  --border:         rgba(35, 31, 32, 0.12);
+  --wash:           rgba(35, 31, 32, 0.04);
 
-  --series-1:       #2a78d6;   /* temperature, and every single-series chart */
-  --series-2:       #eb6834;   /* dew point, wind gust */
-  --series-3:       #1baf7a;   /* apparent temperature */
+  /* Series slots resolve to the per-chart family assignments in brand.css. */
+  --series-1:       var(--viz-temp-1);
+  --series-2:       var(--viz-temp-2);
+  --series-3:       var(--viz-temp-3);
 
-  /* ordinal ramp — wind-rose speed bins, slow → fast */
-  --bin-1: #86b6ef;
-  --bin-2: #5598e7;
-  --bin-3: #2a78d6;
-  --bin-4: #1c5cab;
-  --bin-5: #104281;
+  --good:     var(--y-green);
+  --warning:  var(--y-orange-light);
+  --critical: var(--y-red);
 
-  --good:     #0ca30c;
-  --warning:  #fab219;
-  --critical: #d03b3b;
+  /*
+   * Clear space around the logo, expressed in multiples of the height of
+   * the word "the" — which is how the guide defines it (p13).
+   *
+   *   --logo-clear     minimum clear space on all sides. Do not go below 1.
+   *   --logo-name-gap  gap between the logo and "YMCA Camp Manitou-Lin".
+   *
+   * p13 asks for DOUBLE clear space (2) between the logo and a branch or
+   * association name, to avoid confusion with the national Y. Camp asked
+   * for the name to sit closer, so this ships at 1 — still the full
+   * minimum clear space, just not the doubling. Set it back to 2 if a
+   * brand review ever asks.
+   */
+  --logo-clear: 1;
+  --logo-name-gap: 1;
+
+  /* Height of the logo lockup; "the" is ~0.19 of the full logo height. */
+  --logo-h: clamp(46px, 4.2vh, 74px);
+  --logo-the: calc(var(--logo-h) * 0.19);
 }
 
 @media (prefers-color-scheme: dark) {
   :root:where(:not([data-theme="light"])) {
     color-scheme: dark;
-    --page:           #0d0d0d;
-    --surface-1:      #1a1a19;
-    --surface-2:      #232322;
-    --text-primary:   #ffffff;
-    --text-secondary: #c3c2b7;
-    --text-muted:     #898781;
-    --gridline:       #2c2c2a;
-    --axis:           #383835;
-    --border:         rgba(255, 255, 255, 0.10);
+    --page:           #141416;
+    --surface-1:      #1e1e21;
+    --surface-2:      #27272b;
+    --text-primary:   var(--y-white);
+    --text-secondary: #b6b7b9;
+    --text-muted:     #8a8b8d;
+    --gridline:       #303034;
+    --axis:           #3d3d41;
+    --border:         rgba(255, 255, 255, 0.12);
     --wash:           rgba(255, 255, 255, 0.06);
-    --series-1:       #3987e5;
-    --series-2:       #d95926;
-    --series-3:       #199e70;
-    --bin-1: #184f95;
-    --bin-2: #256abf;
-    --bin-3: #3987e5;
-    --bin-4: #6da7ec;
-    --bin-5: #9ec5f4;
   }
 }
 
 :root[data-theme="dark"] {
   color-scheme: dark;
-  --page:           #0d0d0d;
-  --surface-1:      #1a1a19;
-  --surface-2:      #232322;
-  --text-primary:   #ffffff;
-  --text-secondary: #c3c2b7;
-  --text-muted:     #898781;
-  --gridline:       #2c2c2a;
-  --axis:           #383835;
-  --border:         rgba(255, 255, 255, 0.10);
+  --page:           #141416;
+  --surface-1:      #1e1e21;
+  --surface-2:      #27272b;
+  --text-primary:   var(--y-white);
+  --text-secondary: #b6b7b9;
+  --text-muted:     #8a8b8d;
+  --gridline:       #303034;
+  --axis:           #3d3d41;
+  --border:         rgba(255, 255, 255, 0.12);
   --wash:           rgba(255, 255, 255, 0.06);
-  --series-1:       #3987e5;
-  --series-2:       #d95926;
-  --series-3:       #199e70;
-  --bin-1: #184f95;
-  --bin-2: #256abf;
-  --bin-3: #3987e5;
-  --bin-4: #6da7ec;
-  --bin-5: #9ec5f4;
 }
 
 * { box-sizing: border-box; margin: 0; padding: 0; }
@@ -85,213 +93,471 @@
 body {
   background: var(--page);
   color: var(--text-primary);
-  font-family: system-ui, -apple-system, "Segoe UI", sans-serif;
-  font-size: 14px;
-  line-height: 1.5;
-  padding: 20px 20px 72px;
+  font-family: var(--y-font);
+  font-size: 15px;
+  line-height: 1.45;
   -webkit-font-smoothing: antialiased;
 }
 
-.wrap { max-width: 1240px; margin: 0 auto; }
-
-/* Small caps-ish section labels carry the structure so headings can stay light. */
 .section-label {
-  font-size: 11px;
-  font-weight: 600;
+  font-size: .72rem;
+  font-weight: 700;
   letter-spacing: .09em;
   text-transform: uppercase;
-  color: var(--text-muted);
+  color: var(--text-secondary);
 }
-.section-note { font-size: 12px; color: var(--text-muted); }
+.section-note { font-size: .76rem; color: var(--text-muted); }
 
-/* ───────────── top bar ───────────── */
+/* ═════════════ brand bar ═════════════
+   The full-colour logo may only appear on a white background (p11), and the
+   knockout version is not committed here, so this band stays white in both
+   themes. It is a background field, not a box drawn around the mark. */
 
-.topbar {
+.brandbar {
   display: flex;
-  align-items: flex-start;
-  gap: 16px;
-  padding-bottom: 14px;
-  border-bottom: 1px solid var(--border);
-  margin-bottom: 20px;
+  align-items: center;
+  gap: clamp(14px, 1.6vw, 30px);
+  background: var(--y-white);
+  padding: calc(var(--logo-the) * var(--logo-clear))
+           clamp(16px, 1.8vw, 34px);
+  border-bottom: 3px solid var(--y-blue);
 }
-.ident { flex: 1 1 auto; min-width: 0; }
-.ident h1 { font-size: 19px; font-weight: 600; letter-spacing: -.01em; }
-.ident-meta { font-size: 12px; color: var(--text-muted); margin-top: 1px; }
-.ident-meta .sep { opacity: .5; padding: 0 2px; }
-.ident-meta a { color: inherit; text-underline-offset: 2px; }
 
-.topbar-right { display: flex; align-items: center; gap: 12px; flex: none; }
+.brand-lockup { display: flex; align-items: center; flex: none; }
 
-.status { display: inline-flex; align-items: center; gap: 7px; font-size: 12px; color: var(--text-secondary); }
-.status-dot { width: 8px; height: 8px; border-radius: 50%; background: var(--text-muted); flex: none; }
+/* Clear space is enforced as real padding so nothing can crowd the mark. */
+.brand-logo {
+  height: var(--logo-h);
+  width: auto;
+  display: block;
+  padding: calc(var(--logo-the) * var(--logo-clear));
+  padding-right: calc(var(--logo-the) * var(--logo-name-gap));
+}
+
+/* Shown only when assets/ymca-logo.svg is missing, so the screen is never
+   silently un-branded and nobody mistakes a gap for a design choice. */
+.brand-logo-missing {
+  height: var(--logo-h);
+  display: flex;
+  align-items: center;
+  padding: 0 calc(var(--logo-the) * var(--logo-clear));
+  font-size: .78rem;
+  font-weight: 700;
+  color: var(--y-red);
+  border: 2px dashed var(--y-red);
+  border-radius: 6px;
+  text-align: center;
+  line-height: 1.25;
+}
+
+.brand-name {
+  font-size: clamp(15px, 1.55vh, 27px);
+  font-weight: 700;
+  letter-spacing: .005em;
+  color: var(--y-blue-dark);
+  line-height: 1.15;
+}
+.brand-name .sub {
+  display: block;
+  font-size: .62em;
+  font-weight: 400;
+  letter-spacing: .04em;
+  text-transform: uppercase;
+  color: var(--y-gray);
+  margin-top: .18em;
+}
+
+.brandbar-right {
+  margin-left: auto;
+  display: flex;
+  align-items: center;
+  gap: clamp(10px, 1.1vw, 20px);
+  flex: none;
+}
+
+/* Areas of impact — required on Y websites, either as the trademarked
+   graphic or as a way of telling the impact story (p32). Rendered as copy
+   here; the phrases may be used independently in copy (p16). */
+.impact {
+  font-size: clamp(9px, .82vh, 12.5px);
+  font-weight: 700;
+  letter-spacing: .1em;
+  text-transform: uppercase;
+  color: var(--y-gray);
+  text-align: right;
+  line-height: 1.5;
+}
+.impact b { font-weight: 700; }
+.impact .y1 { color: var(--y-blue); }
+.impact .y2 { color: var(--y-purple); }
+.impact .y3 { color: var(--y-green); }
+
+/* Phones and small tablets: the bar has to wrap or the areas-of-impact line
+   alone is wider than the screen and pushes the page sideways. The standards
+   apply on mobile too (p33), so this wraps rather than dropping anything. */
+@media (max-width: 820px) {
+  .brandbar { flex-wrap: wrap; row-gap: 10px; }
+  .brandbar-right {
+    margin-left: 0;
+    width: 100%;
+    flex-wrap: wrap;
+    justify-content: flex-start;
+    gap: 10px 16px;
+  }
+  .impact { text-align: left; flex: 1 1 100%; }
+  .brand-name { flex: 1 1 auto; min-width: 0; }
+}
+
+.status { display: inline-flex; align-items: center; gap: 8px; font-size: .82rem; color: var(--y-gray); font-weight: 700; }
+.status-dot { width: 11px; height: 11px; border-radius: 50%; background: var(--text-muted); flex: none; }
 .status-dot.live { background: var(--good); }
 .status-dot.stale { background: var(--warning); }
 .status-dot.down { background: var(--critical); }
 
 .ghost-btn {
   font: inherit;
-  font-size: 12px;
-  color: var(--text-secondary);
-  background: var(--surface-1);
-  border: 1px solid var(--border);
-  border-radius: 7px;
-  padding: 5px 11px;
+  font-size: .78rem;
+  font-weight: 700;
+  color: var(--y-blue-dark);
+  background: var(--y-white);
+  border: 1.5px solid var(--y-blue);
+  border-radius: 8px;
+  padding: 6px 13px;
   cursor: pointer;
 }
-.ghost-btn:hover { background: var(--wash); }
+.ghost-btn:hover { background: var(--y-blue); color: var(--y-white); }
 
-/* ───────────── hero ───────────── */
+/* ═════════════ TV grid ═════════════ */
 
-.now {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: stretch;
-  gap: 12px 40px;
+.wrap { padding: clamp(10px, 1vh, 18px); }
+
+.tvgrid {
+  display: grid;
+  gap: clamp(10px, 1vh, 16px);
+  grid-template-columns: 1fr;
+}
+
+/*
+ * TV mode. One viewport, nothing below the fold. Guarded on height as well
+ * as width so a short laptop window keeps the scrolling layout instead of
+ * crushing every card.
+ */
+@media (min-width: 1280px) and (min-height: 700px) {
+  html, body { height: 100%; overflow: hidden; }
+  body { display: flex; flex-direction: column; }
+  .wrap { flex: 1 1 auto; min-height: 0; display: flex; }
+
+  .tvgrid {
+    flex: 1 1 auto;
+    min-height: 0;
+    grid-template-columns: minmax(300px, 19%) minmax(0, 1fr) minmax(340px, 23%);
+    grid-template-rows: minmax(0, 1.15fr) minmax(0, 1fr);
+    grid-template-areas:
+      "now    radar   strikes"
+      "charts charts  charts";
+  }
+
+  .zone-now     { grid-area: now; }
+  .zone-radar   { grid-area: radar; }
+  .zone-strikes { grid-area: strikes; }
+  .zone-charts  { grid-area: charts; }
+
+  .zone-now, .zone-radar, .zone-strikes, .zone-charts { min-height: 0; min-width: 0; }
+}
+
+.panel {
   background: var(--surface-1);
   border: 1px solid var(--border);
-  border-radius: 14px;
-  padding: 20px 24px;
+  border-radius: 12px;
+  padding: clamp(11px, 1.15vh, 19px);
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
 }
-
-.hero { display: flex; align-items: center; gap: 18px; flex: 0 0 auto; }
-.hero-figure { display: flex; align-items: flex-start; }
-/* Proportional figures — tabular-nums would make a big number look loose. */
-.hero-value { font-size: 76px; font-weight: 600; line-height: .92; letter-spacing: -.035em; }
-.hero-degree { font-size: 20px; font-weight: 500; color: var(--text-secondary); margin-top: 6px; margin-left: 3px; }
-
-.hero-side { display: flex; flex-direction: column; justify-content: center; gap: 3px; }
-.hero-feels { font-size: 14px; color: var(--text-secondary); }
-.hero-feels strong { color: var(--text-primary); font-weight: 600; }
-.hero-trend { font-size: 13px; color: var(--text-secondary); }
-.hero-time { font-size: 12px; color: var(--text-muted); }
-
-.hero-facts {
-  flex: 1 1 340px;
-  display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(128px, 1fr));
-  gap: 14px 22px;
-  align-content: center;
-  padding-left: 24px;
-  border-left: 1px solid var(--border);
-}
-@media (max-width: 720px) { .hero-facts { padding-left: 0; border-left: 0; } }
-.fact-label { font-size: 11px; letter-spacing: .05em; text-transform: uppercase; color: var(--text-muted); }
-.fact-value { font-size: 17px; font-weight: 600; margin-top: 1px; }
-.fact-sub { font-size: 12px; color: var(--text-muted); }
-
-/* ───────────── metric rail ───────────── */
-
-.rail-head {
+.panel-head {
   display: flex;
   align-items: baseline;
-  gap: 12px;
-  margin: 26px 0 8px;
+  gap: 10px;
+  margin-bottom: .5em;
+  flex: none;
 }
+.panel-head h2 {
+  font-size: clamp(12px, 1.28vh, 18px);
+  font-weight: 700;
+  letter-spacing: .04em;
+  text-transform: uppercase;
+  color: var(--y-blue-dark);
+}
+.panel-unit { font-size: .74rem; color: var(--text-muted); margin-left: auto; text-align: right; }
 
-.rail {
+/* ── now panel ── */
+
+.hero { display: flex; align-items: baseline; gap: 6px; flex: none; }
+.hero-value {
+  font-size: clamp(52px, 8.5vh, 132px);
+  font-weight: 700;
+  line-height: .88;
+  letter-spacing: -.035em;
+  color: var(--y-blue-dark);
+}
+.hero-degree { font-size: clamp(16px, 2.2vh, 30px); font-weight: 700; color: var(--y-gray); }
+
+.hero-side { margin-top: .3em; flex: none; }
+.hero-feels { font-size: clamp(12px, 1.45vh, 20px); color: var(--text-secondary); }
+.hero-feels strong { color: var(--text-primary); font-weight: 700; }
+.hero-trend { font-size: clamp(11px, 1.3vh, 18px); color: var(--text-secondary); }
+.hero-time { font-size: clamp(10px, 1.12vh, 15px); color: var(--text-muted); margin-top: .2em; }
+
+.hero-facts {
   display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(158px, 1fr));
-  background: var(--surface-1);
-  border: 1px solid var(--border);
-  border-radius: 14px;
-  overflow: hidden;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: .4em 1em;
+  margin-top: .55em;
+  padding-top: .55em;
+  border-top: 1px solid var(--border);
+  flex: none;
 }
-.cell {
-  padding: 13px 16px 10px;
-  border-right: 1px solid var(--border);
-  border-bottom: 1px solid var(--border);
-  min-width: 0;
-}
-.cell-label { font-size: 11px; letter-spacing: .05em; text-transform: uppercase; color: var(--text-muted); }
-.cell-value { font-size: 21px; font-weight: 600; letter-spacing: -.015em; margin-top: 2px; }
-.cell-value .unit { font-size: 12px; font-weight: 500; color: var(--text-secondary); margin-left: 2px; }
-.cell-sub { font-size: 11.5px; color: var(--text-muted); margin-top: 1px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-.cell-spark { margin-top: 6px; height: 30px; overflow: hidden; }
+.fact-label { font-size: clamp(9px, .95vh, 12px); letter-spacing: .06em; text-transform: uppercase; color: var(--text-muted); }
+.fact-value { font-size: clamp(14px, 1.75vh, 24px); font-weight: 700; line-height: 1.15; }
+.fact-sub { font-size: clamp(9px, 1vh, 13px); color: var(--text-muted); }
 
-/* ───────────── filters ───────────── */
+/* The reading rail scrolls inside its own panel if the screen is short,
+   so it can never push the grid out of one viewport. */
+.rail {
+  margin-top: .7em;
+  padding-top: .55em;
+  border-top: 1px solid var(--border);
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: .3em .9em;
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow: auto;
+  align-content: start;
+}
+.cell { min-width: 0; }
+.cell-label { font-size: clamp(9px, .95vh, 12px); letter-spacing: .06em; text-transform: uppercase; color: var(--text-muted); }
+.cell-value { font-size: clamp(14px, 1.75vh, 24px); font-weight: 700; line-height: 1.15; }
+.cell-value .unit { font-size: .55em; font-weight: 700; color: var(--text-secondary); margin-left: 2px; }
+.cell-sub { font-size: clamp(9px, 1vh, 13px); color: var(--text-muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+/* Deliberately short: the rail's last row has to clear the bottom of the
+   panel at 1080p, and a sparkline read from across a room only needs to
+   show a shape, not detail. */
+.cell-spark { margin-top: 1px; height: clamp(12px, 1.45vh, 24px); overflow: hidden; }
+
+/* ── radar ── */
+
+.zone-radar { display: flex; }
+.radar-frame {
+  position: relative;
+  flex: 1 1 auto;
+  min-height: 0;
+  border-radius: 9px;
+  overflow: hidden;
+  background: var(--surface-2);
+}
+.radar-frame canvas { display: block; width: 100%; height: 100%; }
+
+.radar-legend {
+  position: absolute;
+  left: 10px;
+  bottom: 10px;
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  background: rgba(255, 255, 255, .9);
+  border-radius: 6px;
+  padding: 4px 8px;
+  font-size: clamp(9px, .95vh, 12px);
+  color: var(--y-black);
+  font-weight: 700;
+}
+.radar-ramp { display: flex; height: 8px; border-radius: 2px; overflow: hidden; width: 96px; }
+.radar-ramp i { flex: 1; }
+
+.radar-time {
+  position: absolute;
+  right: 10px;
+  top: 10px;
+  background: rgba(255, 255, 255, .9);
+  border-radius: 6px;
+  padding: 3px 9px;
+  font-size: clamp(9px, .98vh, 13px);
+  font-weight: 700;
+  color: var(--y-black);
+}
+.radar-attrib {
+  position: absolute;
+  right: 6px;
+  bottom: 5px;
+  font-size: 9px;
+  color: var(--y-gray);
+  background: rgba(255, 255, 255, .78);
+  border-radius: 4px;
+  padding: 1px 5px;
+}
+.radar-note {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  text-align: center;
+  padding: 1.4em;
+  color: var(--text-muted);
+  font-size: clamp(11px, 1.2vh, 15px);
+}
+
+/* ── lightning strikes ── */
+
+.strike-summary {
+  display: flex;
+  align-items: baseline;
+  gap: .5em;
+  flex: none;
+  padding-bottom: .5em;
+  border-bottom: 1px solid var(--border);
+}
+.strike-count {
+  font-size: clamp(30px, 5.2vh, 68px);
+  font-weight: 700;
+  line-height: .95;
+  color: var(--y-orange-dark);
+  letter-spacing: -.03em;
+}
+.strike-count.none { color: var(--y-green); }
+.strike-count-label { font-size: clamp(10px, 1.12vh, 15px); color: var(--text-secondary); line-height: 1.25; }
+
+.strike-list {
+  list-style: none;
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow: auto;
+  display: flex;
+  flex-direction: column;
+}
+.strike-row {
+  display: grid;
+  grid-template-columns: auto 1fr auto;
+  align-items: center;
+  gap: .7em;
+  padding: .52em 0;
+  border-bottom: 1px solid var(--gridline);
+}
+.strike-row:last-child { border-bottom: 0; }
+
+/* The triangle is a Y graphic element and the guide names it explicitly as a
+   location pointer on a map (p26) — so it marks strikes here too. */
+.strike-tri { width: 15px; height: 13px; flex: none; }
+
+.strike-when { font-size: clamp(13px, 1.62vh, 22px); font-weight: 700; line-height: 1.1; }
+.strike-abs  { font-size: clamp(9px, 1vh, 12.5px); color: var(--text-muted); }
+.strike-dist { font-size: clamp(13px, 1.62vh, 22px); font-weight: 700; text-align: right; line-height: 1.1; }
+.strike-bear { font-size: clamp(9px, 1vh, 12.5px); color: var(--text-muted); text-align: right; }
+
+.strike-empty {
+  flex: 1 1 auto;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  text-align: center;
+  gap: .35em;
+  color: var(--text-secondary);
+  font-size: clamp(11px, 1.25vh, 16px);
+  padding: 1em;
+}
+.strike-empty .big { font-size: clamp(15px, 1.9vh, 25px); font-weight: 700; color: var(--y-green); }
+
+/* ── charts row ── */
+
+.zone-charts { display: flex; flex-direction: column; min-height: 0; }
 
 .filters {
   display: flex;
   flex-wrap: wrap;
   align-items: center;
   gap: 10px;
-  margin: 26px 0 12px;
+  margin-bottom: .5em;
+  flex: none;
 }
-
-/* Segmented control — one control, not six loose buttons. */
 .range-group {
   display: inline-flex;
   background: var(--surface-2);
-  border: 1px solid var(--border);
   border-radius: 9px;
   padding: 2px;
   gap: 2px;
 }
 .range-btn {
   font: inherit;
-  font-size: 12.5px;
-  font-weight: 500;
-  color: var(--text-secondary);
+  font-size: .8rem;
+  font-weight: 700;
+  color: var(--y-gray);
   background: transparent;
   border: 0;
   border-radius: 7px;
-  padding: 5px 12px;
+  padding: 5px 13px;
   cursor: pointer;
   transition: background .12s, color .12s;
 }
-.range-btn:hover { color: var(--text-primary); }
-.range-btn[aria-pressed="true"] {
-  color: var(--text-primary);
-  font-weight: 600;
-  background: var(--surface-1);
-  box-shadow: 0 1px 2px rgba(0, 0, 0, .08);
-}
+.range-btn:hover { color: var(--y-blue-dark); }
+.range-btn[aria-pressed="true"] { color: var(--y-white); background: var(--y-blue); }
 .filters .spacer { flex: 1 1 auto; }
-
-/* ───────────── chart cards ───────────── */
 
 .charts {
   display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: 14px;
+  grid-template-columns: repeat(auto-fit, minmax(230px, 1fr));
+  gap: clamp(9px, .9vh, 15px);
+  flex: 1 1 auto;
+  min-height: 0;
 }
-.card.wide { grid-column: 1 / -1; }
-@media (max-width: 900px) {
-  .charts { grid-template-columns: 1fr; }
-  .card.wide { grid-column: auto; }
+@media (min-width: 1280px) and (min-height: 700px) {
+  /* auto-fit, not a fixed count — the strike-rate card only exists when
+     lightning is being archived, so the row is six cards or seven. */
+  .charts { grid-template-columns: repeat(auto-fit, minmax(min(100%, 200px), 1fr)); }
+  .card { overflow: hidden; }
 }
 
 .card {
   background: var(--surface-1);
   border: 1px solid var(--border);
-  border-radius: 14px;
-  padding: 15px 16px 12px;
+  border-radius: 12px;
+  padding: clamp(8px, .9vh, 14px) clamp(10px, 1vw, 15px);
   min-width: 0;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
 }
-.card-head { display: flex; align-items: baseline; gap: 10px; }
-.card-head h2 { font-size: 13.5px; font-weight: 600; letter-spacing: -.005em; }
-.card-unit { font-size: 11.5px; color: var(--text-muted); margin-left: auto; text-align: right; }
+.card-head { display: flex; align-items: baseline; gap: 8px; flex: none; }
+.card-head h2 {
+  font-size: clamp(11px, 1.18vh, 15px);
+  font-weight: 700;
+  letter-spacing: .035em;
+  text-transform: uppercase;
+  color: var(--y-blue-dark);
+}
+.card-unit { font-size: clamp(9px, .95vh, 12px); color: var(--text-muted); margin-left: auto; text-align: right; }
+.card > div:last-child { flex: 1 1 auto; min-height: 0; }
 
-/* While a range reloads, hold the previous render rather than flashing. */
 .charts.loading, .extremes.loading { opacity: .5; transition: opacity .12s; }
 
-.legend { display: flex; flex-wrap: wrap; gap: 4px 15px; margin: 7px 0 0; }
-.legend-item { display: inline-flex; align-items: center; gap: 6px; color: var(--text-secondary); font-size: 11.5px; }
-.legend-key { width: 14px; height: 2px; border-radius: 1px; flex: none; }
-.legend-key.rect { width: 11px; height: 11px; border-radius: 2px; }
+.legend { display: flex; flex-wrap: wrap; gap: 3px 12px; margin: 4px 0 0; flex: none; }
+.legend-item { display: inline-flex; align-items: center; gap: 5px; color: var(--text-secondary); font-size: clamp(9px, .95vh, 12px); }
+.legend-key { width: 13px; height: 3px; border-radius: 1px; flex: none; }
+.legend-key.rect { width: 10px; height: 10px; border-radius: 2px; }
 
 .chart { width: 100%; display: block; overflow: visible; }
 .spark { display: block; overflow: visible; }
 .chart text { font-family: inherit; }
 .tick-label { fill: var(--text-muted); font-size: 11px; font-variant-numeric: tabular-nums; }
-.end-label { fill: var(--text-secondary); font-size: 11px; font-weight: 600; }
+.end-label { fill: var(--text-secondary); font-size: 11px; font-weight: 700; }
 .gridline { stroke: var(--gridline); stroke-width: 1; fill: none; }
 .axis-line { stroke: var(--axis); stroke-width: 1; }
 .crosshair { stroke: var(--axis); stroke-width: 1; pointer-events: none; }
 
-.empty { color: var(--text-muted); font-size: 12.5px; padding: 40px 0; text-align: center; }
+.empty { color: var(--text-muted); font-size: .8rem; padding: 1.6em 0; text-align: center; }
 
-/* ───────────── tooltip ───────────── */
+/* ═════════════ tooltip ═════════════ */
 
 .tooltip {
   position: fixed;
@@ -308,65 +574,49 @@ body {
 .tooltip[hidden] { display: none; }
 .tooltip .when { color: var(--text-muted); margin-bottom: 5px; font-size: 11.5px; }
 .tooltip .row { display: flex; align-items: center; gap: 8px; padding: 1px 0; }
-.tooltip .row .key { width: 12px; height: 2px; border-radius: 1px; flex: none; }
-.tooltip .row .val { font-weight: 600; color: var(--text-primary); font-variant-numeric: tabular-nums; }
+.tooltip .row .key { width: 12px; height: 3px; border-radius: 1px; flex: none; }
+.tooltip .row .val { font-weight: 700; color: var(--text-primary); font-variant-numeric: tabular-nums; }
 .tooltip .row .name { color: var(--text-secondary); }
 
-/* ───────────── extremes ───────────── */
+/* ═════════════ below-the-fold (non-TV widths only) ═════════════ */
 
 .extremes {
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(178px, 1fr));
   background: var(--surface-1);
   border: 1px solid var(--border);
-  border-radius: 14px;
+  border-radius: 12px;
   overflow: hidden;
+  margin-top: 14px;
 }
-.ex {
-  padding: 12px 16px;
-  border-right: 1px solid var(--border);
-  border-bottom: 1px solid var(--border);
-  min-width: 0;
-}
+.ex { padding: 12px 16px; border-right: 1px solid var(--border); border-bottom: 1px solid var(--border); min-width: 0; }
 .ex-label { font-size: 11px; letter-spacing: .05em; text-transform: uppercase; color: var(--text-muted); }
-.ex-value { font-size: 18px; font-weight: 600; margin-top: 2px; letter-spacing: -.01em; }
+.ex-value { font-size: 18px; font-weight: 700; margin-top: 2px; }
 .ex-when { font-size: 11.5px; color: var(--text-muted); }
 
-/* ───────────── table view ───────────── */
+.rail-head { display: flex; align-items: baseline; gap: 12px; margin: 20px 0 8px; }
 
-.table-wrap { margin-top: 26px; }
-.table-wrap summary {
-  font-size: 12.5px;
-  color: var(--text-secondary);
-  cursor: pointer;
-  padding: 6px 0;
-}
-/* The table can run to hundreds of rows — scroll it rather than the page. */
-.table-scroll {
-  overflow: auto;
-  max-height: 70vh;
-  border: 1px solid var(--border);
-  border-radius: 12px;
-  background: var(--surface-1);
-  margin-top: 6px;
-}
+.table-wrap { margin-top: 20px; }
+.table-wrap summary { font-size: .8rem; color: var(--text-secondary); cursor: pointer; padding: 6px 0; }
+.table-scroll { overflow: auto; max-height: 70vh; border: 1px solid var(--border); border-radius: 12px; background: var(--surface-1); margin-top: 6px; }
 table { border-collapse: collapse; width: 100%; font-size: 12.5px; }
 caption { text-align: left; color: var(--text-muted); font-size: 12px; padding: 10px 14px; }
 th, td { padding: 6px 14px; text-align: right; white-space: nowrap; border-bottom: 1px solid var(--gridline); }
 th:first-child, td:first-child { text-align: left; }
 thead th {
-  color: var(--text-secondary);
-  font-weight: 600;
-  font-size: 11px;
-  letter-spacing: .03em;
-  text-transform: uppercase;
-  position: sticky;
-  top: 0;
-  background: var(--surface-1);
+  color: var(--text-secondary); font-weight: 700; font-size: 11px;
+  letter-spacing: .03em; text-transform: uppercase;
+  position: sticky; top: 0; background: var(--surface-1);
   box-shadow: inset 0 -1px 0 var(--border);
 }
 tbody td { font-variant-numeric: tabular-nums; color: var(--text-secondary); }
 tbody td:first-child { color: var(--text-primary); }
 tbody tr:last-child td { border-bottom: 0; }
 
-footer { color: var(--text-muted); font-size: 11.5px; margin-top: 30px; }
+footer { color: var(--text-muted); font-size: 11.5px; margin-top: 22px; }
+
+/* On the TV the extremes panel, data table and footer are redundant — the
+   screen is for glancing at, not reading. Keep them for desk browsers. */
+@media (min-width: 1280px) and (min-height: 700px) {
+  .rail-head, .extremes, .table-wrap, footer { display: none; }
+}

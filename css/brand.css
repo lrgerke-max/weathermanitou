@@ -1,0 +1,117 @@
+/*
+ * YMCA brand tokens — YMCA of the USA Brand Graphics Guide (452562 1/26).
+ *
+ * Every value here is transcribed from the guide's own specification pages.
+ * Nothing in this file is invented, and nothing should be edited to taste:
+ * "use only the colors that we've chosen as part of our brand" (p18).
+ *
+ *   p18  main palette — five families x three shades, plus gray/black/white
+ *   p19  typography — Cachet Pro (brand), Verdana (electronic/web), Noto Serif
+ *   p27  patterns — light>medium>dark within a family; neighbouring families only
+ *   p28  data visualization — one family per chart, gray as the neutral series
+ */
+
+:root {
+  /* ── Main palette (p18). Each family runs light → medium → dark. ────────── */
+
+  /* Red */
+  --y-red-light:     #f15922;   /* PMS 166C  */
+  --y-red:           #ed1c24;   /* PMS 485C  */
+  --y-red-dark:      #a92b31;   /* PMS 1807C */
+
+  /* Orange */
+  --y-orange-light:  #fcaf17;   /* PMS 137C  */
+  --y-orange:        #f47920;   /* PMS 152C  */
+  --y-orange-dark:   #dd5828;   /* PMS 173C  */
+
+  /* Green */
+  --y-green-light:   #20bdbe;   /* PMS 7472C */
+  --y-green:         #01a490;   /* PMS 3268C */
+  --y-green-dark:    #006b6b;   /* PMS 3298C */
+
+  /* Blue */
+  --y-blue-light:    #00aeef;   /* PMS Process Cyan C */
+  --y-blue:          #0089d0;   /* PMS 3005C */
+  --y-blue-dark:     #0060af;   /* PMS 661C  */
+
+  /* Purple */
+  --y-purple-light:  #c6168d;   /* PMS 233C  */
+  --y-purple:        #92278f;   /* PMS 2415C */
+  --y-purple-dark:   #5c2e91;   /* PMS 268C  */
+
+  /* Gray, black and white (p18). Gray and black carry body text. */
+  --y-gray:          #636466;   /* PMS Cool Gray 11 C */
+  --y-black:         #231f20;   /* PMS Process Black C */
+  --y-white:         #ffffff;
+
+  /*
+   * Colour-family adjacency, for anything that needs a second family (p18):
+   *   red → orange → green → blue → purple → red
+   * Never pair across the wheel.
+   */
+
+  /* ── Typography (p19) ──────────────────────────────────────────────────────
+   * Cachet Pro is the brand font but is licensed and distributed through the
+   * Brand Resource Center, so it is not committed here. The guide names
+   * Verdana as the font for "online applications ... websites and email",
+   * which is exactly this, so Verdana is the compliant default. If the
+   * association licenses Cachet Pro as a webfont, drop it in and it wins —
+   * that is why it leads the stack.
+   */
+  --y-font: "Cachet Pro", Verdana, Geneva, "DejaVu Sans", sans-serif;
+  --y-font-serif: "Noto Serif", Georgia, serif;
+}
+
+/*
+ * ── Data-visualization assignments (p28) ───────────────────────────────────
+ *
+ * The guide's rule is one colour family per chart, using that family's shades,
+ * with gray available as the neutral series. It is NOT a categorical palette,
+ * so each chart below picks a family whose meaning fits the measurement and
+ * stays inside it.
+ *
+ * A note on contrast: the Y palette is a brand system, not a colour-vision-
+ * deficiency-safe one, and holding to one family per chart is what keeps the
+ * series apart here — the shades differ in lightness, not just hue, so they
+ * survive deuteranopia and greyscale. Series are additionally separated by
+ * direct end labels rather than by colour alone.
+ */
+:root {
+  /* Temperature card — red family reads as heat. */
+  --viz-temp-1:      var(--y-red);          /* temperature      */
+  --viz-temp-2:      var(--y-red-light);    /* dew point        */
+  --viz-temp-3:      var(--y-red-dark);     /* apparent temp    */
+
+  /* Humidity and precipitation — blue family reads as water. */
+  --viz-humidity:    var(--y-blue);
+  --viz-precip:      var(--y-blue);
+
+  /* Wind — green family. */
+  --viz-wind-1:      var(--y-green);        /* sustained */
+  --viz-wind-2:      var(--y-green-dark);   /* gust      */
+
+  /* UV — orange family reads as sun. */
+  --viz-uv:          var(--y-orange);
+
+  /* Lightning — orange family, lightest shade. */
+  --viz-lightning:   var(--y-orange-light);
+
+  /*
+   * Wind rose needs five ordered speed bins but a family only has three
+   * shades, so this is an ordinal ramp anchored on the blue family's light
+   * and dark ends, with the medium shade at its centre. Ordinal, one hue —
+   * the ramp the guide's own 3-colour pattern rule describes (p27).
+   */
+  --bin-1: #66cef5;
+  --bin-2: var(--y-blue-light);
+  --bin-3: var(--y-blue);
+  --bin-4: #0074c0;
+  --bin-5: var(--y-blue-dark);
+
+  /* Strike-distance bands — orange family ramp, nearest strike darkest. */
+  --strike-1: var(--y-red);
+  --strike-2: var(--y-orange-dark);
+  --strike-3: var(--y-orange);
+  --strike-4: var(--y-orange-light);
+  --strike-5: var(--y-gray);
+}

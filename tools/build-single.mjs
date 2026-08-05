@@ -177,6 +177,49 @@ const embed = (value) => JSON.stringify(value)
   .replace(/\u2028/g, '\\u2028')
   .replace(/\u2029/g, '\\u2029');
 
+/**
+ * Read a stylesheet and splice in anything it @imports.
+ *
+ * dashboard.css pulls the YMCA brand tokens out of brand.css that way. A
+ * relative @import cannot resolve inside a single file served from a USB
+ * stick, and the failure is silent and total — every colour on the page falls
+ * back to nothing — so the import is resolved here at build time instead.
+ */
+const CSS_IMPORT_RE = /^@import\s+url\(["']?([^"')]+)["']?\);?\s*$/gm;
+
+async function inlineCss(path) {
+  const source = await readFile(join(ROOT, path), 'utf8');
+  const dir = dirname(path);
+  const imports = [...source.matchAll(CSS_IMPORT_RE)];
+  let out = source;
+  for (const [statement, href] of imports) {
+    if (/^(https?:)?\/\//.test(href)) continue;         // leave remote ones alone
+    const nested = await inlineCss(join(dir, href));
+    out = out.replace(statement, `/* inlined from ${href} */\n${nested}`);
+  }
+  return out;
+}
+
+/**
+ * The Y logo as a data URI, so the offline build carries its own branding.
+ * Absent artwork is not an error: the page already shows a visible "logo
+ * missing" marker, which is the honest outcome for a file that must come from
+ * the Brand Resource Center and cannot be recreated.
+ */
+const LOGO_TYPES = { '.svg': 'image/svg+xml', '.png': 'image/png' };
+
+async function inlineLogo(html) {
+  for (const [ext, mime] of Object.entries(LOGO_TYPES)) {
+    try {
+      const bytes = await readFile(join(ROOT, `assets/ymca-logo${ext}`));
+      const uri = `data:${mime};base64,${bytes.toString('base64')}`;
+      return html.replace(/src="assets\/ymca-logo\.svg"/, `src="${uri}"`);
+    } catch { /* try the next extension */ }
+  }
+  console.warn('  no assets/ymca-logo.svg — the offline build will show the missing-logo marker');
+  return html;
+}
+
 function parseArgs(argv) {
   const args = {};
   for (let i = 0; i < argv.length; i += 1) {
@@ -193,7 +236,7 @@ async function main() {
 
   const { files, index, embedded } = await snapshot(days);
   const html = await readFile(join(ROOT, 'index.html'), 'utf8');
-  const css = await readFile(join(ROOT, 'css/dashboard.css'), 'utf8');
+  const css = await inlineCss('css/dashboard.css');
   const script = await bundle(ENTRY);
 
   let out = html.replace(
@@ -208,6 +251,8 @@ async function main() {
     `<script>\nglobalThis.__WX_SNAPSHOT = ${embed(files)};\n</script>\n<script>\n${script}\n</script>`
   );
   if (out === before) throw new Error('could not find the module script tag in index.html');
+
+  out = await inlineLogo(out);
 
   const station = index.station || 'station';
   const date = (embedded[embedded.length - 1] || 'snapshot');
