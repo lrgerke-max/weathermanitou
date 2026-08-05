@@ -1,9 +1,20 @@
-# Weather station archive & dashboard
+# YMCA Camp Manitou-Lin — weather archive & dashboard
 
 Archives the observations from PWS **KMIMIDDL77** into this repository and
 renders them as a static dashboard. No dependencies, no build step, no server —
 the archiver is plain Node, the dashboard is plain HTML/CSS/JS reading committed
 JSON.
+
+The dashboard is built for a **wall-mounted screen in the camp office**: at
+1080p or 1440p it fills exactly one viewport with nothing below the fold and
+nothing behind a scrollbar, type is sized to read from across the room, and it
+refreshes itself every five minutes because nobody is going to walk over and
+press F5. Below 1280px it falls back to an ordinary scrolling page for phones
+and desks.
+
+It follows the **YMCA of the USA Brand Graphics Guide** — see
+[Brand compliance](#brand-compliance), and read `assets/README.md` before first
+deploy, because the Y logo is not in this repository and has to be added.
 
 The point of the archiver is ownership: Weather Underground's history API is
 fine for recent dates, but an archive in the repo is permanent, queryable and
@@ -202,20 +213,32 @@ wind rose works across a season without loading a season of raw observations.
 filter describes now, everything below it describes the selected range.** So the
 numbers on screen always agree with each other.
 
-**Now** — the current temperature as the hero figure, with apparent temperature
-and the change over the last hour; today's high, low and peak gust each with the
-time they happened; sunrise, sunset and daylight length computed from the
-station's own coordinates. Then a rail of every live reading — dew point,
-humidity, wind, gust, pressure, rain, solar, UV — each showing the current value,
-today's range for context, and a 24-hour sparkline. A status dot reports live,
-delayed or offline from the age of the newest observation.
+The screen is three panels over a row of charts.
 
-**The selected range** — eight charts: temperature (with dew point, and apparent
-temperature drawn only across the stretches where it actually differs from the
-reading), relative humidity, wind speed, a 16-sector wind rose binned by speed,
-barometric pressure, precipitation, solar radiation and UV index. Below them, a
-panel of range extremes — each with the moment it happened — and the full data
-table.
+**Now** (left) — the current temperature as the hero figure, with apparent
+temperature and the change over the last hour; today's high, low and peak gust
+each with the time they happened; sunrise, sunset and daylight length computed
+from the station's own coordinates. Then dew point, humidity, wind and gust,
+each with the current value, today's range for context, and a 24-hour sparkline.
+A status dot reports live, delayed or offline from the age of the newest
+observation.
+
+**Radar** (centre) — see [Radar](#radar).
+
+**Lightning** (right) — see [The lightning panel](#the-lightning-panel).
+
+**The selected range** (bottom) — six charts: temperature (with dew point, and
+apparent temperature drawn only across the stretches where it actually differs
+from the reading), relative humidity, wind speed, a 16-sector wind rose binned
+by speed, precipitation and UV index. On narrower screens a panel of range
+extremes and the full data table follow below; both are hidden on the TV, where
+the screen is for glancing at rather than reading.
+
+**Barometric pressure and solar radiation are not displayed.** Neither changes
+a decision anyone makes at camp, and the space is worth more to radar and
+lightning. Both are still archived and still in the daily rollups — only the
+display is narrower, so putting either card back is a markup change, not a data
+migration.
 
 Ranges up to 7 days draw the full-resolution observations; longer ranges switch
 to the daily rollups, because 90 days of five-minute samples is ~26,000 points
@@ -224,20 +247,101 @@ every field the high-resolution view shows, including the wind rose and the
 timestamps of each day's extremes.
 
 Charts are hand-rolled SVG — a crosshair tooltip listing every series, the same
-readout on keyboard focus via arrow keys, direct end labels, a data table twin,
-and a light/dark palette validated for colour-vision deficiency (categorical
-slots for the multi-series charts, an ordinal one-hue ramp for the rose's speed
-bins).
+readout on keyboard focus via arrow keys, direct end labels and a data table
+twin. Colour follows the Y data-visualization standard: one colour family per
+chart rather than a categorical palette (see below).
 
-Two more cards appear when lightning is being archived: **Lightning** (strikes
-per hour or per day) and **Strike direction** (a rose of located strikes, binned
-by distance). Plus a rail cell with today's count and the last strike's distance
-and bearing, and closest-strike, total and cloud-to-ground entries in the
-extremes panel. The direction rose needs located strikes; a bare detector has no
-direction to plot, so that card stays hidden.
+UV and lightning disappear by themselves on a station that doesn't report them,
+rather than showing a row of dashes.
 
-Solar, UV and lightning disappear by themselves on a station that doesn't report
-them, rather than showing a row of dashes.
+## The lightning panel
+
+A permanent panel, always on screen whether or not anything is happening: the
+**five most recent strikes within 25 miles**, each with how long ago it hit, how
+far away it was and which way. Above them, the count in the last hour — the
+number that decides whether the waterfront stays open — which turns green at
+zero. With no strikes archived in range it reads **All clear** rather than
+sitting empty, because a blank panel on a wall is ambiguous and "all clear" is
+not.
+
+Ages re-render every 30 seconds, so "4 min ago" stays true between data
+refreshes.
+
+Distances are recomputed in the browser from each strike's own coordinates
+rather than read from the archived `distanceMi`, which is measured from the
+weather station at archive time. That matters if you move the reference point:
+
+```js
+// js/app.js
+const CAMP = {
+  lat: null,      // null → use the station's own reported position
+  lon: null,
+  radiusMi: 25,
+  strikeCount: 5,
+};
+```
+
+It ships as `null`, meaning the station's own coordinates, so the panel and the
+archive agree by construction. Set `lat`/`lon` to pin it to the camp office at
+1095 N Briggs Rd if the station sits elsewhere on the property; a bare detector
+that reports a distance and no position still works, it just has no bearing to
+show. The maths is covered in `tests/strikes.test.mjs`.
+
+## Radar
+
+Camp-centred, animated, from [RainViewer](https://www.rainviewer.com/) — free,
+no API key, so nothing secret ends up in the page. Radar tiles are composited
+over a muted CARTO basemap onto a canvas, ringed at the 25-mile radius, with the
+Y triangle marking camp; the guide names the triangle as a map pointer, so it is
+doing a job the brand already sanctions (p26). The last ~50 minutes of frames
+animate on a loop, which is the part a still image cannot give you: whether a
+cell is heading at camp or away from it.
+
+Two hosts have to be reachable from wherever the screen lives:
+
+```
+api.rainviewer.com        frame index
+basemaps.cartocdn.com     basemap tiles
+```
+
+If either is blocked the panel says so in words, naming the host. That is
+deliberate — **a blank radar on a camp wall reads as clear skies**, which is the
+worst thing it could do. The archived readings are unaffected either way.
+
+## Brand compliance
+
+Built to the YMCA of the USA Brand Graphics Guide (452562 1/26).
+
+- **Colour** — `css/brand.css` transcribes the full main palette: five families
+  of three shades, plus gray, black and white, with the CMYK/RGB/hex/PMS values
+  from p18. Nothing outside that palette appears anywhere. Charts follow the
+  data-visualization rule of one colour family per chart (p28) rather than a
+  categorical palette — temperature is the red family, humidity and rain blue,
+  wind green, UV orange. The wind rose needs five ordered bins where a family
+  has three shades, so it uses an ordinal ramp anchored on the blue family's
+  light and dark ends.
+- **Type** — Cachet Pro leads the stack, but it is licensed through the Brand
+  Resource Center and is not committed here. The guide names **Verdana** for
+  "online applications ... websites and email" (p19), so that is the compliant
+  default and what actually renders. License Cachet Pro as a webfont and it wins
+  automatically.
+- **Logo** — not in this repository, and it cannot be generated. See
+  `assets/README.md`. Until the file is added the header shows a red dashed
+  marker rather than a silent gap. The brand bar stays **white in both themes**,
+  because the full-colour logo may only appear on white (p11).
+- **Clear space** — enforced in CSS from the height of the word "the", per p13.
+- **Areas of impact** — present in the header as copy, which is one of the two
+  forms p32 permits on a website.
+
+One knowing departure: p13 asks for **double** clear space between the logo and
+an association name. This ships at single, at the camp's request, because the
+doubled gap looked wrong with the name set directly beneath the mark. It is one
+variable — `--logo-name-gap` in `css/dashboard.css` — so a brand review can undo
+it in one line.
+
+Before linking this anywhere outside camp, note that p32 asks you to email
+theYbrand@ymca.net prior to launch if a site will be used beyond the
+association's immediate service area. GitHub Pages is public.
 
 ## Ideas this sets up
 

@@ -7,14 +7,50 @@
 
 import {
   loadIndex, loadDaily, loadLatest, loadRange,
-  loadLightningIndex, loadLightningDaily, loadLightningLatest, loadLightningRange,
+  loadLightningIndex, loadLightningDaily, loadLightningRange,
 } from './data.js';
 import { lineChart, barChart, windRose, sparkline, legend } from './charts.js';
 import { sunTimes } from './sun.js';
+import { initRadar } from './radar.js';
+import { renderStrikes } from './strikes.js';
+
+/*
+ * Where "here" is, for the radar centre and every lightning distance.
+ *
+ * Defaults to the weather station's own reported position, which is what the
+ * archive already measures strike distances against — so the numbers on screen
+ * and the numbers in the archive agree by construction. Override lat/lon to
+ * pin it to the camp office (1095 N Briggs Rd) if the station sits somewhere
+ * else on the property; strike distances are then recomputed in the browser
+ * from each strike's coordinates. See js/strikes.js.
+ */
+const CAMP = {
+  lat: null,          // null → take it from the station's own metadata
+  lon: null,
+  radiusMi: 25,
+  strikeCount: 5,
+};
+
+// A wall display is never reloaded by hand, so it reloads itself.
+const DATA_REFRESH_MS = 5 * 60_000;
 
 const SERIES_1 = 'var(--series-1)';
-const SERIES_2 = 'var(--series-2)';
-const SERIES_3 = 'var(--series-3)';
+
+/*
+ * Per-chart colour, assigned in css/brand.css. The Y data-visualization rule
+ * is one colour family per chart, using that family's shades (guide p28), so
+ * these are NOT interchangeable categorical slots — each chart owns a family
+ * whose meaning fits the measurement, and mixing them across a single chart
+ * would break the standard.
+ */
+const TEMP_1 = 'var(--viz-temp-1)';
+const TEMP_2 = 'var(--viz-temp-2)';
+const TEMP_3 = 'var(--viz-temp-3)';
+const HUMIDITY_C = 'var(--viz-humidity)';
+const WIND_1 = 'var(--viz-wind-1)';
+const WIND_2 = 'var(--viz-wind-2)';
+const PRECIP_C = 'var(--viz-precip)';
+const UV_C = 'var(--viz-uv)';
 
 // Wind-rose speed bins. Edges must match ROSE_EDGES in tools/store.mjs,
 // which pre-computes the same bins into the daily rollups.
@@ -44,9 +80,7 @@ const fixed = (v, digits) => (has(v) ? v.toFixed(digits) : '—');
 const degF = (v) => (has(v) ? `${v.toFixed(1)}°F` : '—');
 const mph = (v) => (has(v) ? `${v.toFixed(1)} mph` : '—');
 const inches = (v) => (has(v) ? `${v.toFixed(2)}"` : '—');
-const inHg = (v) => (has(v) ? `${v.toFixed(2)} inHg` : '—');
 const percent = (v) => (has(v) ? `${Math.round(v)}%` : '—');
-const wm2 = (v) => (has(v) ? `${Math.round(v)} W/m²` : '—');
 const uvi = (v) => (has(v) ? `${Math.round(v)}` : '—');
 
 const compass = (deg) => (has(deg) ? COMPASS[Math.round(deg / 22.5) % 16] : '—');
@@ -240,43 +274,7 @@ function cell(spec) {
   return node;
 }
 
-/**
- * The lightning cell. Distance is the *last* strike, not the closest — that is
- * what the detector reports, and calling it anything else would overstate it.
- */
-function lightningCell(lightningLatest, lightningDay) {
-  const reading = lightningLatest?.reading;
-  if (!reading) return null;
-
-  // A locating network's daily total comes from the rollup (it counts events);
-  // a detector reports its own running counter.
-  const strikes = has(lightningLatest.today?.strikes) ? lightningLatest.today.strikes
-    : has(reading.countToday) ? reading.countToday : 0;
-
-  const parts = [];
-  if (has(reading.lastDistanceMi)) {
-    const bearing = has(reading.lastBearingDeg) ? ` ${compass(reading.lastBearingDeg)}` : '';
-    parts.push(`last ${reading.lastDistanceMi.toFixed(1)} mi${bearing}`);
-  }
-  if (reading.lastStrikeEpoch) parts.push(relativeTime(reading.lastStrikeEpoch * 1000));
-
-  const strikeEvents = lightningDay?.strikes || [];
-  const samples = lightningDay?.samples || [];
-
-  return cell({
-    label: 'Lightning',
-    value: `${Math.round(strikes)}`,
-    unit: strikes === 1 ? 'strike today' : 'strikes today',
-    sub: parts.length ? parts.join(' · ') : 'none detected today',
-    series: strikeEvents.length
-      ? strikeEventBuckets(strikeEvents, 'hour').map((bucket) => bucket.v)
-      // A detector's counter only climbs, so its shape over the day is the storm's.
-      : samples.map((sample) => sample.countToday),
-    color: SERIES_2,
-  });
-}
-
-function renderRail(latest, dayPoints, lightningLatest, lightningDay) {
+function renderRail(latest, dayPoints) {
   const rail = document.getElementById('rail');
   rail.replaceChildren();
   const observation = latest?.observation;
@@ -291,62 +289,39 @@ function renderRail(latest, dayPoints, lightningLatest, lightningDay) {
       label: 'Dew point',
       value: fixed(observation.dewptF, 1), unit: '°F',
       sub: range(today?.dewptMin, today?.dewptMax, (v) => v.toFixed(0)),
-      series: series('dewptF'), color: SERIES_2,
+      series: series('dewptF'), color: TEMP_2,
     }),
     cell({
       label: 'Humidity',
       value: fixed(observation.humidity, 0), unit: '%',
       sub: range(today?.humidityMin, today?.humidityMax, (v) => `${v.toFixed(0)}%`),
-      series: series('humidity'),
+      series: series('humidity'), color: HUMIDITY_C,
     }),
     cell({
       label: 'Wind',
       value: fixed(observation.windMph, 1), unit: 'mph',
       sub: `from ${compass(observation.windDir)}${has(observation.windDir) ? ` (${Math.round(observation.windDir)}°)` : ''}`,
-      series: series('windMph'),
+      series: series('windMph'), color: WIND_1,
     }),
     cell({
       label: 'Gust',
       value: fixed(observation.gustMph, 1), unit: 'mph',
       sub: has(today?.gustMax) ? `peak ${fixed(today.gustMax, 1)} today` : null,
-      series: series('gustMph'), color: SERIES_2,
-    }),
-    cell({
-      label: 'Pressure',
-      value: fixed(observation.pressureIn, 2), unit: 'inHg',
-      sub: range(today?.pressureMin, today?.pressureMax, (v) => v.toFixed(2)),
-      series: series('pressureIn'),
-    }),
-    cell({
-      label: 'Rain today',
-      value: fixed(observation.precipTotalIn, 2), unit: 'in',
-      sub: has(today?.precipRateMax) && today.precipRateMax > 0
-        ? `peak ${fixed(today.precipRateMax, 2)} in/hr` : 'no rain today',
-      series: series('precipTotalIn'),
+      series: series('gustMph'), color: WIND_2,
     }),
   );
 
-  // Solar and UV only exist on stations with those sensors; a station without
-  // them gets no empty cells rather than a row of dashes.
-  if (dayPoints.some((point) => has(point.solarWm2))) {
-    rail.append(cell({
-      label: 'Solar',
-      value: fixed(observation.solarWm2, 0), unit: 'W/m²',
-      sub: has(today?.solarMax) ? `peak ${fixed(today.solarMax, 0)} today` : null,
-      series: series('solarWm2'),
-    }));
-  }
-  if (dayPoints.some((point) => has(point.uv))) {
-    rail.append(cell({
-      label: 'UV index',
-      value: fixed(observation.uv, 0),
-      sub: has(today?.uvMax) ? `peak ${fixed(today.uvMax, 0)} today` : null,
-      series: series('uv'),
-    }));
-  }
+  // Barometric pressure and solar radiation were dropped for the camp-office
+  // screen: neither changes an operational decision here, and the space is
+  // better spent on radar and lightning. The archive still records both, so
+  // nothing is lost — only the display is narrower.
+  // UV has its own card in the charts row, so it stays out of the rail: the
+  // left column has to fit the viewport without scrolling, and nothing on a
+  // wall display should live behind a scrollbar.
 
-  const bolt = lightningCell(lightningLatest, lightningDay);
-  if (bolt) rail.append(bolt);
+  // No rain cell and no lightning cell: rain already appears in the facts
+  // above, and lightning has a panel of its own now. On a screen read from
+  // across a room, saying anything twice costs more than it is worth.
 
   for (const node of rail.children) node.drawSpark?.();
 }
@@ -384,59 +359,6 @@ function precipBuckets(points, unit) {
     previous = point.precipTotalIn;
   }
   return [...buckets.entries()].sort((a, b) => a[0] - b[0]).map(([x, v]) => ({ x, v }));
-}
-
-// Strike-distance bands for the direction rose. Edges must match STRIKE_BANDS
-// in tools/store.mjs, which pre-computes the same bands per day.
-const STRIKE_BINS = [
-  { label: '0–5 mi', color: 'var(--bin-1)' },
-  { label: '5–10', color: 'var(--bin-2)' },
-  { label: '10–25', color: 'var(--bin-3)' },
-  { label: '25–50', color: 'var(--bin-4)' },
-  { label: '50+', color: 'var(--bin-5)' },
-];
-const STRIKE_EDGES = [5, 10, 25, 50];
-
-const strikeBand = (miles) => {
-  for (let i = 0; i < STRIKE_EDGES.length; i += 1) if (miles < STRIKE_EDGES[i]) return i;
-  return STRIKE_EDGES.length;
-};
-
-/** Count located strikes into hour or day buckets. */
-function strikeEventBuckets(strikes, unit) {
-  const buckets = new Map();
-  for (const strike of strikes) {
-    const start = new Date(strike.x);
-    if (unit === 'day') start.setHours(0, 0, 0, 0);
-    else start.setMinutes(0, 0, 0);
-    const key = start.getTime();
-    buckets.set(key, (buckets.get(key) || 0) + 1);
-  }
-  return [...buckets.entries()].sort((a, b) => a[0] - b[0]).map(([x, v]) => ({ x, v }));
-}
-
-/** Direction rose input: from located strikes, or summed from the daily rows. */
-function strikeRoseData(lightning) {
-  const sectors = Array.from({ length: 16 }, () => new Array(STRIKE_BINS.length).fill(0));
-  let total = 0;
-
-  if (lightning.mode === 'hires') {
-    for (const strike of lightning.strikes) {
-      if (!has(strike.distanceMi) || !has(strike.bearingDeg)) continue;
-      sectors[Math.round(strike.bearingDeg / 22.5) % 16][strikeBand(strike.distanceMi)] += 1;
-      total += 1;
-    }
-  } else {
-    for (const day of lightning.points) {
-      const rose = day.rose;
-      if (!rose?.sectors) continue;
-      total += rose.total || 0;
-      rose.sectors.forEach((counts, sector) => {
-        counts.forEach((count, bin) => { sectors[sector][bin] += count; });
-      });
-    }
-  }
-  return { sectors, total };
 }
 
 /**
@@ -509,7 +431,6 @@ function renderCharts(slice, lightning) {
   const endF = (v) => (has(v) ? `${v.toFixed(1)}°` : '');
   const end1 = (v) => (has(v) ? v.toFixed(1) : '');
   const end0 = (v) => (has(v) ? v.toFixed(0) : '');
-  const end2 = (v) => (has(v) ? v.toFixed(2) : '');
 
   // ── temperature
   const temp = slots('chart-temp');
@@ -524,12 +445,12 @@ function renderCharts(slice, lightning) {
       return { ...p, apparentF: diverges ? feels : null };
     });
     const series = [
-      { key: 'tempF', name: 'Temperature', color: SERIES_1 },
-      { key: 'dewptF', name: 'Dew point', color: SERIES_2 },
+      { key: 'tempF', name: 'Temperature', color: TEMP_1 },
+      { key: 'dewptF', name: 'Dew point', color: TEMP_2 },
     ];
     // Only claim the third series in the legend when it actually appears.
     if (withApparent.some((p) => has(p.apparentF))) {
-      series.push({ key: 'apparentF', name: 'Feels like (where it differs)', color: SERIES_3 });
+      series.push({ key: 'apparentF', name: 'Feels like (where it differs)', color: TEMP_3 });
     }
     document.getElementById('temp-sub').textContent = '°F · temperature, dew point, apparent';
     legend(temp.slot, series);
@@ -540,14 +461,14 @@ function renderCharts(slice, lightning) {
     });
   } else {
     const series = [
-      { key: 'tempAvg', name: 'Daily average', color: SERIES_1 },
-      { key: 'dewptAvg', name: 'Dew point average', color: SERIES_2 },
+      { key: 'tempAvg', name: 'Daily average', color: TEMP_1 },
+      { key: 'dewptAvg', name: 'Dew point average', color: TEMP_2 },
     ];
     document.getElementById('temp-sub').textContent = '°F · daily high–low range, averages';
     legend(temp.slot, series);
     lineChart(temp.chart, {
       points, series,
-      band: { lowKey: 'tempMin', highKey: 'tempMax', color: SERIES_1 },
+      band: { lowKey: 'tempMin', highKey: 'tempMax', color: TEMP_1 },
       format: degF, formatEnd: endF, formatTick: (v) => v.toFixed(0), xFormat,
       ariaLabel: 'Daily temperature range, average temperature and dew point',
     });
@@ -556,13 +477,13 @@ function renderCharts(slice, lightning) {
   // ── humidity
   const humidity = slots('chart-humidity');
   const humiditySeries = hires
-    ? [{ key: 'humidity', name: 'Relative humidity', color: SERIES_1 }]
-    : [{ key: 'humidityAvg', name: 'Daily average', color: SERIES_1 }];
+    ? [{ key: 'humidity', name: 'Relative humidity', color: HUMIDITY_C }]
+    : [{ key: 'humidityAvg', name: 'Daily average', color: HUMIDITY_C }];
   document.getElementById('humidity-sub').textContent = hires ? '%' : '% · daily range, average';
   legend(humidity.slot, humiditySeries);
   lineChart(humidity.chart, {
     points, series: humiditySeries,
-    band: hires ? null : { lowKey: 'humidityMin', highKey: 'humidityMax', color: SERIES_1 },
+    band: hires ? null : { lowKey: 'humidityMin', highKey: 'humidityMax', color: HUMIDITY_C },
     format: percent, formatEnd: end0, formatTick: (v) => v.toFixed(0), xFormat,
     ariaLabel: 'Relative humidity over time',
   });
@@ -570,10 +491,10 @@ function renderCharts(slice, lightning) {
   // ── wind speed
   const wind = slots('chart-wind');
   const windSeries = hires
-    ? [{ key: 'windMph', name: 'Sustained', color: SERIES_1 },
-       { key: 'gustMph', name: 'Gust', color: SERIES_2 }]
-    : [{ key: 'windAvg', name: 'Daily average', color: SERIES_1 },
-       { key: 'gustMax', name: 'Peak gust', color: SERIES_2 }];
+    ? [{ key: 'windMph', name: 'Sustained', color: WIND_1 },
+       { key: 'gustMph', name: 'Gust', color: WIND_2 }]
+    : [{ key: 'windAvg', name: 'Daily average', color: WIND_1 },
+       { key: 'gustMax', name: 'Peak gust', color: WIND_2 }];
   legend(wind.slot, windSeries);
   lineChart(wind.chart, {
     points, series: windSeries, format: mph, formatEnd: end1,
@@ -592,31 +513,6 @@ function renderCharts(slice, lightning) {
     sectors: roseInput.sectors, bins: WIND_BINS, total: roseInput.total, names: COMPASS,
   });
 
-  // ── pressure
-  const pressure = slots('chart-pressure');
-  if (hires) {
-    const series = [{ key: 'pressureIn', name: 'Pressure', color: SERIES_1 }];
-    legend(pressure.slot, series);
-    lineChart(pressure.chart, {
-      points, series, format: inHg, formatEnd: end2, formatTick: (v) => v.toFixed(2), xFormat,
-      ariaLabel: 'Barometric pressure over time',
-    });
-  } else {
-    const withMid = points.map((p) => ({
-      ...p,
-      pressureMid: has(p.pressureMin) && has(p.pressureMax)
-        ? (p.pressureMin + p.pressureMax) / 2 : null,
-    }));
-    const series = [{ key: 'pressureMid', name: 'Daily midpoint', color: SERIES_1 }];
-    legend(pressure.slot, series);
-    lineChart(pressure.chart, {
-      points: withMid, series,
-      band: { lowKey: 'pressureMin', highKey: 'pressureMax', color: SERIES_1 },
-      format: inHg, formatEnd: end2, formatTick: (v) => v.toFixed(2), xFormat,
-      ariaLabel: 'Daily barometric pressure range',
-    });
-  }
-
   // ── precipitation
   // Hourly bars only make sense over a day or so; past that they collapse into
   // hairlines, so the buckets widen to match the span.
@@ -628,31 +524,18 @@ function renderCharts(slice, lightning) {
   document.getElementById('precip-sub').textContent = byHour ? 'inches per hour' : 'inches per day';
   legend(precip.slot, []);
   barChart(precip.chart, {
-    points: precipPoints, color: SERIES_1, name: byHour ? 'Rain this hour' : 'Rain',
+    points: precipPoints, color: PRECIP_C, name: byHour ? 'Rain this hour' : 'Rain',
     format: inches, formatTick: (v) => v.toFixed(2),
     xFormat: byHour ? xFormat : dayBucket,
     emptyMessage: 'No rain recorded in this range.',
     ariaLabel: 'Precipitation',
   });
 
-  // ── solar radiation
-  const solar = slots('chart-solar');
-  const solarSeries = hires
-    ? [{ key: 'solarWm2', name: 'Solar radiation', color: SERIES_1 }]
-    : [{ key: 'solarMax', name: 'Daily peak', color: SERIES_1 }];
-  legend(solar.slot, solarSeries);
-  lineChart(solar.chart, {
-    points, series: solarSeries, format: wm2, formatEnd: end0,
-    formatTick: (v) => v.toFixed(0), xFormat,
-    emptyMessage: 'This station does not report solar radiation.',
-    ariaLabel: 'Solar radiation over time',
-  });
-
   // ── UV index
   const uv = slots('chart-uv');
   const uvSeries = hires
-    ? [{ key: 'uv', name: 'UV index', color: SERIES_1 }]
-    : [{ key: 'uvMax', name: 'Daily peak', color: SERIES_1 }];
+    ? [{ key: 'uv', name: 'UV index', color: UV_C }]
+    : [{ key: 'uvMax', name: 'Daily peak', color: UV_C }];
   document.getElementById('uv-sub').textContent = hires ? 'index' : 'index · daily peak';
   legend(uv.slot, uvSeries);
   lineChart(uv.chart, {
@@ -662,51 +545,10 @@ function renderCharts(slice, lightning) {
     ariaLabel: 'UV index over time',
   });
 
-  // ── lightning — the cards only exist when lightning is being archived
-  const card = document.getElementById('card-lightning');
-  const roseCard = document.getElementById('card-strike-rose');
-  const hiresBolt = lightning?.mode === 'hires';
-  const located = hiresBolt ? lightning.strikes : [];
-  const counter = hiresBolt ? lightning.samples : [];
-  const dailyBolt = hiresBolt ? [] : (lightning?.points || []);
-  const anyLightning = located.length || counter.length || dailyBolt.length;
-
-  card.hidden = !anyLightning;
-  if (anyLightning) {
-    const boltByHour = hiresBolt && span <= 1.5 * DAY_MS;
-    const unit = boltByHour ? 'hour' : 'day';
-    // Located strikes are counted directly; a bare counter has to be
-    // differenced. Either way the bars mean the same thing.
-    const buckets = located.length ? strikeEventBuckets(located, unit)
-      : counter.length ? strikeBuckets(counter, unit)
-        : dailyBolt.map((day) => ({ x: day.x, v: has(day.strikes) ? day.strikes : 0 }));
-
-    const bolt = slots('chart-lightning');
-    document.getElementById('lightning-sub').textContent =
-      boltByHour ? 'strikes per hour' : 'strikes per day';
-    legend(bolt.slot, []);
-    barChart(bolt.chart, {
-      points: buckets, color: SERIES_2, name: 'Strikes',
-      format: (v) => `${Math.round(v)}`, formatTick: (v) => v.toFixed(0),
-      xFormat: boltByHour ? xFormat : dayBucket,
-      emptyMessage: 'No strikes detected in this range.',
-      ariaLabel: 'Lightning strikes over time',
-    });
-  }
-
-  // ── strike direction — only a locating network can fill this in
-  const strikeRoseInput = anyLightning ? strikeRoseData(lightning) : { total: 0 };
-  roseCard.hidden = !strikeRoseInput.total;
-  if (strikeRoseInput.total) {
-    const strikeRose = slots('chart-strike-rose');
-    const n = strikeRoseInput.total;
-    document.getElementById('strike-rose-sub').textContent =
-      `${n} located strike${n === 1 ? '' : 's'}`;
-    legend(strikeRose.slot, STRIKE_BINS.map((bin) => ({ name: bin.label, color: bin.color })), 'rect');
-    windRose(strikeRose.chart, {
-      sectors: strikeRoseInput.sectors, bins: STRIKE_BINS, total: n, names: COMPASS,
-    });
-  }
+  // No lightning cards in the charts row. The strike-rate bars and the
+  // strike-direction rose both said, less directly, what the permanent
+  // Lightning panel now says in words: how recent, how far, which way. Their
+  // width is worth more to the six cards that remain.
 }
 
 // ─────────────────────────── extremes ───────────────────────────
@@ -762,9 +604,6 @@ function rangeExtremes(slice) {
     { label: 'Peak rain rate', got: pick('precipRateIn', 'precipRateMax', null, 'max'), format: (v) => `${fixed(v, 2)} in/hr` },
     { label: 'Highest humidity', got: pick('humidity', 'humidityMax', null, 'max'), format: percent },
     { label: 'Lowest humidity', got: pick('humidity', 'humidityMin', null, 'min'), format: percent },
-    { label: 'Highest pressure', got: pick('pressureIn', 'pressureMax', null, 'max'), format: inHg },
-    { label: 'Lowest pressure', got: pick('pressureIn', 'pressureMin', null, 'min'), format: inHg },
-    { label: 'Peak solar', got: pick('solarWm2', 'solarMax', null, 'max'), format: wm2 },
     { label: 'Peak UV', got: pick('uv', 'uvMax', null, 'max'), format: uvi },
   ];
 }
@@ -860,10 +699,8 @@ const HIRES_COLUMNS = [
   ['Wind mph', (p) => fixed(p.windMph, 1)],
   ['Gust mph', (p) => fixed(p.gustMph, 1)],
   ['Dir', (p) => (has(p.windDir) ? `${compass(p.windDir)} ${Math.round(p.windDir)}°` : '—')],
-  ['Press inHg', (p) => fixed(p.pressureIn, 2)],
   ['Rain in', (p) => fixed(p.precipTotalIn, 2)],
   ['Rate in/hr', (p) => fixed(p.precipRateIn, 2)],
-  ['Solar W/m²', (p) => fixed(p.solarWm2, 0)],
   ['UV', (p) => fixed(p.uv, 0)],
 ];
 
@@ -879,9 +716,6 @@ const DAILY_COLUMNS = [
   ['Gust mph', (p) => fixed(p.gustMax, 1)],
   ['Rain in', (p) => fixed(p.precipIn, 2)],
   ['Rate in/hr', (p) => fixed(p.precipRateMax, 2)],
-  ['Press min', (p) => fixed(p.pressureMin, 2)],
-  ['Press max', (p) => fixed(p.pressureMax, 2)],
-  ['Solar W/m²', (p) => fixed(p.solarMax, 0)],
   ['UV', (p) => fixed(p.uvMax, 0)],
   ['Obs', (p) => fixed(p.count, 0)],
 ];
@@ -925,37 +759,72 @@ function renderTable(slice) {
 
 // ─────────────────────────── boot ───────────────────────────
 
+/**
+ * The logo is a registered trademark and may not be recreated, retyped or
+ * restyled (guide p11–12), so the page cannot draw a stand-in. If the official
+ * artwork is missing, say so loudly rather than rendering a blank header that
+ * looks deliberate.
+ */
+function watchLogo() {
+  const img = document.getElementById('brand-logo');
+  if (!img) return;
+
+  const flag = () => {
+    const box = document.createElement('div');
+    box.className = 'brand-logo-missing';
+    box.textContent = 'Y logo missing — add assets/ymca-logo.svg';
+    img.replaceWith(box);
+  };
+
+  img.addEventListener('error', flag);
+  // This module is deferred, so a missing file has usually already failed by
+  // the time the listener attaches and the error event is long gone. A
+  // complete image with no intrinsic width is one that failed.
+  if (img.complete && img.naturalWidth === 0) flag();
+}
+
 async function main() {
   initTheme();
+  watchLogo();
 
-  const [index, daily, latest, boltIndex, boltDaily, boltLatest] = await Promise.all([
+  // Rebound by the unattended refresh below, so `let`, not `const`.
+  let [index, daily, latest, boltIndex, boltDaily] = await Promise.all([
     loadIndex(), loadDaily(), loadLatest(),
-    loadLightningIndex(), loadLightningDaily(), loadLightningLatest(),
+    loadLightningIndex(), loadLightningDaily(),
   ]);
 
-  const station = latest?.station || index.station;
-  if (station) {
-    document.getElementById('station-id').textContent = station;
-    document.getElementById('wu-link').href = `https://www.wunderground.com/dashboard/pws/${station}`;
-  }
-
   const meta = latest?.meta;
-  if (meta?.neighborhood) {
-    document.getElementById('station-name').textContent = meta.neighborhood;
-    document.title = `${meta.neighborhood} — Station Dashboard`;
-  }
-  const place = [
-    has(meta?.lat) && has(meta?.lon) ? `${meta.lat.toFixed(3)}, ${meta.lon.toFixed(3)}` : null,
-    has(meta?.elevationFt) ? `${Math.round(meta.elevationFt)} ft` : null,
-    meta?.softwareType || null,
-  ].filter(Boolean).join(' · ');
-  document.getElementById('station-place').textContent = place || '—';
+
+  // Reference point for radar centring and every strike distance.
+  const here = {
+    lat: has(CAMP.lat) ? CAMP.lat : meta?.lat,
+    lon: has(CAMP.lon) ? CAMP.lon : meta?.lon,
+  };
 
   // The "now" block is always the last 24 hours, whatever range is selected.
   const daySlice = await loadRange(1, index, daily);
-  const boltDay = await loadLightningRange(1, boltIndex, boltDaily);
   renderHero(latest, daySlice.points);
-  renderRail(latest, daySlice.points, boltLatest, boltDay);
+  renderRail(latest, daySlice.points);
+
+  // ── lightning panel — a week's window, so "the last five" survives a quiet
+  // spell instead of emptying out every midnight.
+  const boltWeek = await loadLightningRange(7, boltIndex, boltDaily);
+  const archivingLightning = Boolean(boltIndex?.days?.length || boltDaily?.days?.length);
+  renderStrikes(boltWeek?.strikes || [], here, {
+    radiusMi: CAMP.radiusMi,
+    limit: CAMP.strikeCount,
+    // Distances need a reference point; without one the panel would be lying.
+    configured: archivingLightning && has(here.lat) && has(here.lon),
+  });
+
+  // ── radar
+  const radarNote = document.getElementById('radar-note');
+  if (has(here.lat) && has(here.lon)) {
+    document.getElementById('radar-sub').textContent = `${CAMP.radiusMi} mi around camp`;
+    initRadar(here, CAMP.radiusMi);
+  } else if (radarNote) {
+    radarNote.textContent = 'Radar needs the station\'s coordinates — none archived yet.';
+  }
 
   // Count archived days from the rollups: in a single-file snapshot only a few
   // days of raw observations come along, but every day's summary does.
@@ -994,16 +863,53 @@ async function main() {
     extremes.classList.remove('loading');
   }
 
+  let currentRange = 1;
   for (const button of document.querySelectorAll('.range-btn')) {
     button.addEventListener('click', () => {
       for (const other of document.querySelectorAll('.range-btn')) {
         other.setAttribute('aria-pressed', String(other === button));
       }
-      show(Number(button.dataset.range));
+      currentRange = Number(button.dataset.range);
+      show(currentRange);
     });
   }
 
   await show(1);
+
+  /*
+   * Unattended refresh. Nobody is going to walk over and reload the camp
+   * office TV, and the archive gains a commit every 15 minutes, so the page
+   * re-reads it in place. In place rather than location.reload() so the radar
+   * animation keeps playing and the screen never blinks; the radar module runs
+   * its own refresh on the same sort of cadence.
+   */
+  setInterval(async () => {
+    try {
+      const next = await Promise.all([
+        loadIndex(), loadDaily(), loadLatest(),
+        loadLightningIndex(), loadLightningDaily(),
+      ]);
+      [index, daily, latest, boltIndex, boltDaily] = next;
+
+      const freshDay = await loadRange(1, index, daily);
+      renderHero(latest, freshDay.points);
+      renderRail(latest, freshDay.points);
+
+      const freshWeek = await loadLightningRange(7, boltIndex, boltDaily);
+      renderStrikes(freshWeek?.strikes || [], here, {
+        radiusMi: CAMP.radiusMi,
+        limit: CAMP.strikeCount,
+        configured: Boolean(boltIndex?.days?.length || boltDaily?.days?.length)
+          && has(here.lat) && has(here.lon),
+      });
+
+      await show(currentRange);
+    } catch (err) {
+      // A failed refresh must leave the last good screen up: stale readings
+      // with an honest "x min ago" beat an error page on a wall.
+      console.error('refresh failed', err);
+    }
+  }, DATA_REFRESH_MS);
 }
 
 main().catch((err) => {
