@@ -370,7 +370,7 @@ export async function mergeLightning(station, reading) {
  * observations do: long ranges are drawn from these rows, and direction should
  * survive that switch without loading a season of individual strikes.
  */
-function summariseStrikes(date, strikes) {
+export function summariseStrikes(date, strikes) {
   const sectors = Array.from({ length: 16 }, () => new Array(STRIKE_BANDS.length + 1).fill(0));
   let closest = null;
   let lastAt = null;

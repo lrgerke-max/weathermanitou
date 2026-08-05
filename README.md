@@ -25,6 +25,48 @@ export WU_API_KEY=your-key-here
 For the scheduled archive, add it as a repository secret named `WU_API_KEY`
 under **Settings → Secrets and variables → Actions**.
 
+## Check it works first
+
+Nothing here was written against a live payload — the field mappings come from
+documented response shapes. The interesting failure is therefore not "the
+request failed" but "the request succeeded and we read the wrong field names",
+which looks like a dashboard full of dashes rather than an error.
+
+`doctor.mjs` calls each configured API and reports, field by field, what
+actually came back:
+
+```bash
+WU_API_KEY=… node weather/tools/doctor.mjs
+```
+
+```
+Weather Underground
+  ok    current conditions: 72.2°F, 0 min old
+  ok    all core fields mapped: epoch, tempF, dewptF, humidity, windMph, …
+  ok    optional sensors: heatIndexF, windChillF, gustMph, windDir, solarWm2, uv
+  ok    rapid history: 288 observations in the last 24 hours
+  FAIL  every rapid-history record has a null temperature — aggregate field names are wrong
+```
+
+It exits non-zero on failure, so it can gate a first deploy. Run it before
+trusting anything else in this directory.
+
+## Tests
+
+```bash
+node --test "weather/tests/*.test.mjs"
+```
+
+No dependencies and no install — the runner is built into Node. The suite covers
+the parts that are easy to get quietly wrong: the normaliser against both
+endpoint spellings, the daily rollups (including the counter-reset and
+accumulator traps), the sun maths against known solstice and equinox values, and
+every provider parser against stubbed payloads — that last group being the
+record of what we currently believe each API returns. **When a live run
+disagrees with one of those fixtures, fix the fixture and the parser together.**
+
+CI runs them on any change under `weather/`.
+
 ## Commands
 
 ```bash
