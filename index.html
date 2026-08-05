@@ -134,13 +134,22 @@
       <div id="chart-uv"></div>
     </section>
 
-    <!-- Shown only when a lightning detector is archiving. -->
+    <!-- Both shown only when lightning is being archived. -->
     <section class="card" id="card-lightning" hidden>
       <div class="card-head">
         <h2>Lightning</h2>
         <span class="card-unit" id="lightning-sub">strikes</span>
       </div>
       <div id="chart-lightning"></div>
+    </section>
+
+    <!-- Needs located strikes; a bare counter has no direction to plot. -->
+    <section class="card" id="card-strike-rose" hidden>
+      <div class="card-head">
+        <h2>Strike direction</h2>
+        <span class="card-unit" id="strike-rose-sub">by distance</span>
+      </div>
+      <div id="chart-strike-rose"></div>
     </section>
 
   </div>

@@ -76,34 +76,40 @@ instead, and why:
 
 | Source | Verdict |
 |---|---|
-| **The station's own detector** (Ecowitt WH57, or the equivalent on an Ambient console), read from the vendor's cloud API | **What this uses.** It is your yard, not a regional average, and the vendor reports a strike *counter* rather than a stream — so a 15-minute poll misses nothing. |
-| [Blitzortung](https://www.blitzortung.org/) / lightningmaps | Free and excellent coverage, but its [terms](https://docs.lightningmaps.org/) restrict use to project participants, forbid storm-warning use outright, and require third-party apps to serve data from their own servers rather than connecting to Blitzortung's. Not something to ship in a dashboard. |
-| **GOES-19 GLM** (satellite lightning mapper) on the [NOAA AWS open bucket](https://catalog.data.gov/dataset/noaa-goes-r-series-geostationary-lightning-mapper-glm-level-2-lightning-detection-events-groups3) | Public domain, no key, 30–60 s latency, hemisphere-wide. The real option if you ever want *area* coverage rather than your own yard — but it is netCDF every 20 seconds, so it needs a parser and far more machinery than a scheduled poll. |
-| Vaisala NLDN, Earth Networks | Commercial licensing. |
+| **[Xweather](https://www.xweather.com/products/weather-api/lightning)** (Vaisala) `lightning/closest` | **What this uses.** Vaisala runs the network the US lightning industry is built on, and the [free tier](https://www.xweather.com/products/weather-api) covers every endpoint at 15,000 accesses/month — a 15-minute poll spends about 2,900. Returns *individual strikes* with coordinates, so distance, bearing and cloud-to-ground vs intracloud are all real. |
+| **[GOES-19 GLM](https://catalog.data.gov/dataset/noaa-goes-r-series-geostationary-lightning-mapper-glm-level-2-lightning-detection-events-groups3)** (satellite) on the NOAA AWS open bucket | The best *unencumbered* option: public domain, no key, no quota, 30–60 s latency. Rejected for now on cost of machinery, not quality — it is netCDF4/HDF5 every 20 seconds, roughly 9 MB per 15-minute window to download and parse, with coarser geolocation than a ground network. The right answer if the Xweather quota or terms ever stop working; see `lightning.mjs` for where a provider slots in. |
+| [Blitzortung](https://www.blitzortung.org/) / lightningmaps | Free, superb coverage, and the one everyone reaches for — but its [terms](https://docs.lightningmaps.org/) restrict use to project participants, forbid storm-warning use outright, and require third-party apps to serve data from their own servers rather than connecting to Blitzortung's. Not something to ship. |
+| **A local detector** (Ecowitt WH57, Ambient console) | Supported, and preferred over nothing, but it reports only a counter, the last strike's distance, and when — no coordinates, so no direction. Used automatically if configured and no network is. |
+| AccuWeather, Earth Networks, NLDN direct | Commercial licensing. |
 
-Configure whichever console you have — the archiver picks it up automatically
-and exits quietly when neither is set:
+Sign up at [Xweather's free developer tier](https://signup.xweather.com/developer)
+and configure:
 
 ```bash
-# Ecowitt (GW1000/GW1100/GW2000 gateways, WH57 sensor)
-export ECOWITT_APPLICATION_KEY=… ECOWITT_API_KEY=… ECOWITT_MAC=…
-
-# or Ambient Weather
-export AMBIENT_APPLICATION_KEY=… AMBIENT_API_KEY=…   # AMBIENT_MAC optional
-
-node weather/tools/lightning-archive.mjs
+export XWEATHER_CLIENT_ID=… XWEATHER_CLIENT_SECRET=…
+node weather/tools/lightning-archive.mjs --radius 150 --minutes 30
 ```
 
-Add the same names as repository secrets for the scheduled workflow.
+Or, for a station that has its own detector instead:
 
-Both vendors report the same three things: a strike counter that resets at local
-midnight, the time of the last strike, and its distance. **Not** individual
-strike coordinates — so the dashboard shows counts, timing and distance, and
-does not pretend to a map or a bearing it has no data for.
+```bash
+export ECOWITT_APPLICATION_KEY=… ECOWITT_API_KEY=… ECOWITT_MAC=…
+# or
+export AMBIENT_APPLICATION_KEY=… AMBIENT_API_KEY=…   # AMBIENT_MAC optional
+```
 
-Readings are stored only when they change, so a quiet week costs a handful of
-rows rather than one per poll, and each day's first sample is always kept so a
-strike-free day still records that the detector was watching.
+Add the same names as repository secrets for the scheduled workflow. A locating
+network wins when both are configured — it is a superset of what a local
+detector can tell you.
+
+Each run asks for everything since the last strike already archived, plus a
+minute of overlap, and strikes merge on the provider's strike ID: re-seeing a
+strike is free, missing one is not. A run after a long gap is capped at six
+hours so it can't ask for a week at once.
+
+Days carry a **direction rose** (16 sectors × distance band) in the rollups, so
+strike direction survives the switch to long ranges without loading a season of
+individual strikes — the same trick the wind rose uses.
 
 ## Data layout
 
@@ -177,9 +183,12 @@ and a light/dark palette validated for colour-vision deficiency (categorical
 slots for the multi-series charts, an ordinal one-hue ramp for the rose's speed
 bins).
 
-A ninth card, **Lightning**, appears when a detector is archiving: strikes per
-hour or per day, a rail cell with today's count and the last strike's distance
-and age, and closest-strike and total-strikes entries in the extremes panel.
+Two more cards appear when lightning is being archived: **Lightning** (strikes
+per hour or per day) and **Strike direction** (a rose of located strikes, binned
+by distance). Plus a rail cell with today's count and the last strike's distance
+and bearing, and closest-strike, total and cloud-to-ground entries in the
+extremes panel. The direction rose needs located strikes; a bare detector has no
+direction to plot, so that card stays hidden.
 
 Solar, UV and lightning disappear by themselves on a station that doesn't report
 them, rather than showing a row of dashes.

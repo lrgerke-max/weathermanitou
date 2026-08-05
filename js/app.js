@@ -248,18 +248,30 @@ function lightningCell(lightningLatest, lightningDay) {
   const reading = lightningLatest?.reading;
   if (!reading) return null;
 
-  const strikes = has(reading.countToday) ? reading.countToday : 0;
+  // A locating network's daily total comes from the rollup (it counts events);
+  // a detector reports its own running counter.
+  const strikes = has(lightningLatest.today?.strikes) ? lightningLatest.today.strikes
+    : has(reading.countToday) ? reading.countToday : 0;
+
   const parts = [];
-  if (has(reading.lastDistanceMi)) parts.push(`last ${reading.lastDistanceMi.toFixed(1)} mi`);
+  if (has(reading.lastDistanceMi)) {
+    const bearing = has(reading.lastBearingDeg) ? ` ${compass(reading.lastBearingDeg)}` : '';
+    parts.push(`last ${reading.lastDistanceMi.toFixed(1)} mi${bearing}`);
+  }
   if (reading.lastStrikeEpoch) parts.push(relativeTime(reading.lastStrikeEpoch * 1000));
+
+  const strikeEvents = lightningDay?.strikes || [];
+  const samples = lightningDay?.samples || [];
 
   return cell({
     label: 'Lightning',
     value: `${Math.round(strikes)}`,
     unit: strikes === 1 ? 'strike today' : 'strikes today',
     sub: parts.length ? parts.join(' · ') : 'none detected today',
-    // The counter only climbs, so its shape over the day is the storm's shape.
-    series: (lightningDay || []).map((sample) => sample.countToday),
+    series: strikeEvents.length
+      ? strikeEventBuckets(strikeEvents, 'hour').map((bucket) => bucket.v)
+      // A detector's counter only climbs, so its shape over the day is the storm's.
+      : samples.map((sample) => sample.countToday),
     color: SERIES_2,
   });
 }
@@ -374,8 +386,61 @@ function precipBuckets(points, unit) {
   return [...buckets.entries()].sort((a, b) => a[0] - b[0]).map(([x, v]) => ({ x, v }));
 }
 
+// Strike-distance bands for the direction rose. Edges must match STRIKE_BANDS
+// in weather/tools/store.mjs, which pre-computes the same bands per day.
+const STRIKE_BINS = [
+  { label: '0–5 mi', color: 'var(--bin-1)' },
+  { label: '5–10', color: 'var(--bin-2)' },
+  { label: '10–25', color: 'var(--bin-3)' },
+  { label: '25–50', color: 'var(--bin-4)' },
+  { label: '50+', color: 'var(--bin-5)' },
+];
+const STRIKE_EDGES = [5, 10, 25, 50];
+
+const strikeBand = (miles) => {
+  for (let i = 0; i < STRIKE_EDGES.length; i += 1) if (miles < STRIKE_EDGES[i]) return i;
+  return STRIKE_EDGES.length;
+};
+
+/** Count located strikes into hour or day buckets. */
+function strikeEventBuckets(strikes, unit) {
+  const buckets = new Map();
+  for (const strike of strikes) {
+    const start = new Date(strike.x);
+    if (unit === 'day') start.setHours(0, 0, 0, 0);
+    else start.setMinutes(0, 0, 0);
+    const key = start.getTime();
+    buckets.set(key, (buckets.get(key) || 0) + 1);
+  }
+  return [...buckets.entries()].sort((a, b) => a[0] - b[0]).map(([x, v]) => ({ x, v }));
+}
+
+/** Direction rose input: from located strikes, or summed from the daily rows. */
+function strikeRoseData(lightning) {
+  const sectors = Array.from({ length: 16 }, () => new Array(STRIKE_BINS.length).fill(0));
+  let total = 0;
+
+  if (lightning.mode === 'hires') {
+    for (const strike of lightning.strikes) {
+      if (!has(strike.distanceMi) || !has(strike.bearingDeg)) continue;
+      sectors[Math.round(strike.bearingDeg / 22.5) % 16][strikeBand(strike.distanceMi)] += 1;
+      total += 1;
+    }
+  } else {
+    for (const day of lightning.points) {
+      const rose = day.rose;
+      if (!rose?.sectors) continue;
+      total += rose.total || 0;
+      rose.sectors.forEach((counts, sector) => {
+        counts.forEach((count, bin) => { sectors[sector][bin] += count; });
+      });
+    }
+  }
+  return { sectors, total };
+}
+
 /**
- * Strikes per hour or per day, from the detector's cumulative daily counter —
+ * Strikes per hour or per day, from a detector's cumulative daily counter —
  * the same shape as rainfall: differences between samples, with a decrease
  * meaning the local-midnight reset rather than negative lightning.
  */
@@ -597,15 +662,24 @@ function renderCharts(slice, lightning) {
     ariaLabel: 'UV index over time',
   });
 
-  // ── lightning — the card only exists when a detector is archiving
+  // ── lightning — the cards only exist when lightning is being archived
   const card = document.getElementById('card-lightning');
-  const strikePoints = lightning?.points || [];
-  card.hidden = !strikePoints.length;
-  if (strikePoints.length) {
-    const boltByHour = lightning.mode === 'hires' && span <= 1.5 * DAY_MS;
-    const buckets = lightning.mode === 'hires'
-      ? strikeBuckets(strikePoints, boltByHour ? 'hour' : 'day')
-      : strikePoints.map((day) => ({ x: day.x, v: has(day.strikes) ? day.strikes : 0 }));
+  const roseCard = document.getElementById('card-strike-rose');
+  const hiresBolt = lightning?.mode === 'hires';
+  const located = hiresBolt ? lightning.strikes : [];
+  const counter = hiresBolt ? lightning.samples : [];
+  const dailyBolt = hiresBolt ? [] : (lightning?.points || []);
+  const anyLightning = located.length || counter.length || dailyBolt.length;
+
+  card.hidden = !anyLightning;
+  if (anyLightning) {
+    const boltByHour = hiresBolt && span <= 1.5 * DAY_MS;
+    const unit = boltByHour ? 'hour' : 'day';
+    // Located strikes are counted directly; a bare counter has to be
+    // differenced. Either way the bars mean the same thing.
+    const buckets = located.length ? strikeEventBuckets(located, unit)
+      : counter.length ? strikeBuckets(counter, unit)
+        : dailyBolt.map((day) => ({ x: day.x, v: has(day.strikes) ? day.strikes : 0 }));
 
     const bolt = slots('chart-lightning');
     document.getElementById('lightning-sub').textContent =
@@ -617,6 +691,20 @@ function renderCharts(slice, lightning) {
       xFormat: boltByHour ? xFormat : dayBucket,
       emptyMessage: 'No strikes detected in this range.',
       ariaLabel: 'Lightning strikes over time',
+    });
+  }
+
+  // ── strike direction — only a locating network can fill this in
+  const strikeRoseInput = anyLightning ? strikeRoseData(lightning) : { total: 0 };
+  roseCard.hidden = !strikeRoseInput.total;
+  if (strikeRoseInput.total) {
+    const strikeRose = slots('chart-strike-rose');
+    const n = strikeRoseInput.total;
+    document.getElementById('strike-rose-sub').textContent =
+      `${n} located strike${n === 1 ? '' : 's'}`;
+    legend(strikeRose.slot, STRIKE_BINS.map((bin) => ({ name: bin.label, color: bin.color })), 'rect');
+    windRose(strikeRose.chart, {
+      sectors: strikeRoseInput.sectors, bins: STRIKE_BINS, total: n, names: COMPASS,
     });
   }
 }
@@ -685,28 +773,41 @@ const miles = (v) => (has(v) ? `${v.toFixed(1)} mi` : '—');
 
 /** Lightning's contribution to the extremes panel, when a detector is archiving. */
 function lightningExtremes(lightning) {
-  const points = lightning?.points || [];
-  if (!points.length) return [];
+  if (!lightning) return [];
+  const located = lightning.mode === 'hires' ? lightning.strikes : [];
+  const counter = lightning.mode === 'hires' ? lightning.samples : [];
+  const daily = lightning.mode === 'hires' ? [] : (lightning.points || []);
+  if (!located.length && !counter.length && !daily.length) return [];
 
   let closest = null;
   let total = 0;
+  let ground = 0;
+  let hasType = false;
 
-  if (lightning.mode === 'hires') {
-    total = strikeBuckets(points, 'day').reduce((sum, bucket) => sum + bucket.v, 0);
-    for (const sample of points) {
-      if (!has(sample.lastDistanceMi) || !sample.lastStrikeEpoch) continue;
-      if (!closest || sample.lastDistanceMi < closest.v) {
-        closest = { v: sample.lastDistanceMi, at: sample.lastStrikeEpoch * 1000 };
-      }
+  const consider = (distance, at, dayOnly) => {
+    if (!has(distance)) return;
+    if (!closest || distance < closest.v) closest = { v: distance, at, dayOnly };
+  };
+
+  if (located.length) {
+    total = located.length;
+    for (const strike of located) {
+      consider(strike.distanceMi, strike.epoch * 1000, false);
+      if (strike.type) hasType = true;
+      if (/^cg/i.test(strike.type || '')) ground += 1;
+    }
+  } else if (counter.length) {
+    total = strikeBuckets(counter, 'day').reduce((sum, bucket) => sum + bucket.v, 0);
+    for (const sample of counter) {
+      if (!sample.lastStrikeEpoch) continue;
+      consider(sample.lastDistanceMi, sample.lastStrikeEpoch * 1000, false);
     }
   } else {
-    for (const day of points) {
+    for (const day of daily) {
       total += has(day.strikes) ? day.strikes : 0;
-      if (!has(day.closestMi)) continue;
-      if (!closest || day.closestMi < closest.v) {
-        const exact = has(day.closestAt);
-        closest = { v: day.closestMi, at: exact ? day.closestAt * 1000 : day.x, dayOnly: !exact };
-      }
+      if (has(day.cg)) { ground += day.cg; hasType = true; }
+      const exact = has(day.closestAt);
+      consider(day.closestMi, exact ? day.closestAt * 1000 : day.x, !exact);
     }
   }
 
@@ -714,6 +815,11 @@ function lightningExtremes(lightning) {
     label: 'Strikes', got: { v: total, at: null }, format: (v) => `${Math.round(v)}`,
   }];
   if (closest) rows.push({ label: 'Closest strike', got: closest, format: miles });
+  if (hasType) {
+    rows.push({
+      label: 'Cloud to ground', got: { v: ground, at: null }, format: (v) => `${Math.round(v)}`,
+    });
+  }
   return rows;
 }
 
@@ -849,7 +955,7 @@ async function main() {
   const daySlice = await loadRange(1, index, daily);
   const boltDay = await loadLightningRange(1, boltIndex, boltDaily);
   renderHero(latest, daySlice.points);
-  renderRail(latest, daySlice.points, boltLatest, boltDay.points);
+  renderRail(latest, daySlice.points, boltLatest, boltDay);
 
   // Count archived days from the rollups: in a single-file snapshot only a few
   // days of raw observations come along, but every day's summary does.

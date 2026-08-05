@@ -49,24 +49,37 @@ export function loadLightningIndex() { return optional('lightning/index.json', {
 export function loadLightningDaily() { return optional('lightning/daily.json', { days: [] }); }
 export function loadLightningLatest() { return optional('lightning/latest.json', null); }
 
+/**
+ * Two shapes come back depending on the source: `strikes` are individual
+ * located events (a locating network), `samples` are counter readings (a local
+ * detector). Callers prefer strikes when present — they carry distance,
+ * direction and stroke type.
+ */
 export async function loadLightningRange(rangeDays, index, daily) {
   if (rangeDays > 0 && rangeDays <= 7) {
     const dates = (index.days || []).slice(-(rangeDays + 1));
     const files = await Promise.all(
       dates.map((date) => optional(`lightning/${date}.json`, null))
     );
-    const samples = files
-      .filter((file) => file && Array.isArray(file.samples))
-      .flatMap((file) => file.samples)
+
+    const withX = (rows) => rows
       .sort((a, b) => a.epoch - b.epoch)
-      .map((sample) => ({ ...sample, x: sample.epoch * 1000 }));
-    return { mode: 'hires', points: samples };
+      .map((row) => ({ ...row, x: row.epoch * 1000 }));
+
+    return {
+      mode: 'hires',
+      strikes: withX(files.flatMap((file) => file?.strikes || [])),
+      samples: withX(files.flatMap((file) => file?.samples || [])),
+      points: [],
+    };
   }
 
   let days = daily.days || [];
   if (rangeDays > 0) days = days.slice(-rangeDays);
   return {
     mode: 'daily',
+    strikes: [],
+    samples: [],
     points: days.map((day) => ({ ...day, x: new Date(`${day.date}T12:00:00`).getTime() })),
   };
 }

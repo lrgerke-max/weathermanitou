@@ -260,6 +260,78 @@ async function stationOffsetMinutes() {
 const localDateFor = (epoch, offsetMinutes) =>
   new Date((epoch + offsetMinutes * 60) * 1000).toISOString().slice(0, 10);
 
+/** The station's coordinates, as reported in its own observations. */
+export async function stationCoords() {
+  const latest = await readJson(join(DATA_DIR, 'latest.json'), null);
+  const meta = latest?.meta;
+  if (typeof meta?.lat !== 'number' || typeof meta?.lon !== 'number') return null;
+  return { lat: meta.lat, lon: meta.lon };
+}
+
+// Strike-distance bands for the direction rose, in miles. Ordered, so the
+// dashboard draws them with the ordinal ramp rather than eight competing hues.
+const STRIKE_BANDS = [5, 10, 25, 50];
+
+function distanceBand(miles) {
+  for (let i = 0; i < STRIKE_BANDS.length; i += 1) if (miles < STRIKE_BANDS[i]) return i;
+  return STRIKE_BANDS.length;
+}
+
+/**
+ * Merge individual strikes into their station-local days, keyed by the
+ * provider's strike ID.
+ *
+ * Every run asks the provider for an overlapping window, so re-seeing a strike
+ * is the normal case, not an error — the ID is what makes that free.
+ */
+export async function mergeStrikes(station, provider, strikes) {
+  const offset = await stationOffsetMinutes();
+  const byDate = new Map();
+  for (const strike of strikes) {
+    if (!strike.epoch) continue;
+    const date = localDateFor(strike.epoch, offset);
+    if (!byDate.has(date)) byDate.set(date, []);
+    byDate.get(date).push(strike);
+  }
+
+  const touched = [];
+  for (const [date, incoming] of byDate) {
+    const path = join(LIGHTNING_DIR, `${date}.json`);
+    const existing = await readJson(path, null);
+    const merged = new Map((existing?.strikes || []).map((s) => [s.id, s]));
+
+    let added = 0;
+    for (const strike of incoming) {
+      if (merged.has(strike.id)) continue;
+      merged.set(strike.id, strike);
+      added += 1;
+    }
+    if (!added) continue;
+
+    await writeJson(path, {
+      station,
+      date,
+      provider,
+      units: 'imperial',
+      strikes: [...merged.values()].sort((a, b) => a.epoch - b.epoch),
+      ...(existing?.samples ? { samples: existing.samples } : {}),
+    });
+    touched.push({ date, added });
+  }
+  return touched;
+}
+
+/** The newest strike already archived, for choosing the next fetch window. */
+export async function lastStrikeEpoch() {
+  const index = await readJson(join(LIGHTNING_DIR, 'index.json'), null);
+  const date = index?.lastDate;
+  if (!date) return null;
+  const day = await readJson(join(LIGHTNING_DIR, `${date}.json`), null);
+  const strikes = day?.strikes;
+  if (!strikes?.length) return null;
+  return strikes[strikes.length - 1].epoch;
+}
+
 /** Append one lightning reading to its station-local day. */
 export async function mergeLightning(station, reading) {
   const offset = await stationOffsetMinutes();
@@ -291,7 +363,47 @@ export async function mergeLightning(station, reading) {
   return { date, changed: true };
 }
 
-/** One day of lightning samples → its summary row. */
+/**
+ * One day of located strikes → its summary row.
+ *
+ * Carries a direction rose (16 sectors × distance band) for the same reason the
+ * observations do: long ranges are drawn from these rows, and direction should
+ * survive that switch without loading a season of individual strikes.
+ */
+function summariseStrikes(date, strikes) {
+  const sectors = Array.from({ length: 16 }, () => new Array(STRIKE_BANDS.length + 1).fill(0));
+  let closest = null;
+  let lastAt = null;
+  let cg = 0;
+  let ic = 0;
+  let located = 0;
+
+  for (const strike of strikes) {
+    if (lastAt === null || strike.epoch > lastAt) lastAt = strike.epoch;
+    if (/^cg/i.test(strike.type || '')) cg += 1;
+    else if (/^ic/i.test(strike.type || '')) ic += 1;
+
+    const distance = strike.distanceMi;
+    if (typeof distance !== 'number') continue;
+    if (!closest || distance < closest.mi) closest = { mi: distance, at: strike.epoch };
+    if (typeof strike.bearingDeg !== 'number') continue;
+    sectors[Math.round(strike.bearingDeg / 22.5) % 16][distanceBand(distance)] += 1;
+    located += 1;
+  }
+
+  return {
+    date,
+    strikes: strikes.length,
+    closestMi: closest?.mi ?? null,
+    closestAt: closest?.at ?? null,
+    lastStrikeAt: lastAt,
+    cg,
+    ic,
+    rose: { total: located, sectors },
+  };
+}
+
+/** One day of detector samples → its summary row. */
 export function summariseLightning(date, samples, offsetMinutes) {
   // Strikes are the sum of the counter's positive increments, not its daily
   // high-water mark. A counter that has not reset yet still reads yesterday's
@@ -340,7 +452,10 @@ export async function updateLightningDaily(dates) {
 
   for (const date of dates) {
     const day = await readJson(join(LIGHTNING_DIR, `${date}.json`), null);
-    if (day?.samples?.length) byDate.set(date, summariseLightning(date, day.samples, offset));
+    // Located strikes beat a counter whenever both exist: they carry distance,
+    // direction and stroke type, where the counter carries only a total.
+    if (day?.strikes?.length) byDate.set(date, summariseStrikes(date, day.strikes));
+    else if (day?.samples?.length) byDate.set(date, summariseLightning(date, day.samples, offset));
   }
 
   const days = [...byDate.values()].sort((a, b) => a.date.localeCompare(b.date));
