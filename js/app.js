@@ -31,8 +31,15 @@ const CAMP = {
   strikeCount: 5,
 };
 
-// A wall display is never reloaded by hand, so it reloads itself.
-const DATA_REFRESH_MS = 5 * 60_000;
+/*
+ * A wall display is never reloaded by hand, so it reloads itself.
+ *
+ * One minute, against an archiver that commits every five: the poll is cheap
+ * (three small JSON files off a CDN) and being the slower half of the pipeline
+ * would be silly. This bounds how long a fresh commit sits unseen; it cannot
+ * make the underlying data any newer than the last archive run.
+ */
+const DATA_REFRESH_MS = 60_000;
 
 const SERIES_1 = 'var(--series-1)';
 
@@ -158,19 +165,51 @@ function initTheme() {
 
 // ─────────────────────────── now: hero + facts ───────────────────────────
 
+/*
+ * Thresholds, against an archiver scheduled every 5 minutes.
+ *
+ * 20 minutes means roughly four consecutive missed runs — past the point where
+ * "GitHub dropped a tick" stops being the likely explanation. 90 minutes means
+ * something is actually broken. Both are deliberately well inside the interval
+ * where a camp decision might turn on the reading.
+ */
+const STALE_MIN = 20;
+const OFFLINE_MIN = 90;
+
+// Held so the age can keep climbing on its own. If the page cannot reach
+// GitHub, no re-render happens, and a frozen "2 min ago" is exactly the
+// confident-but-wrong screen this indicator exists to prevent.
+let lastObservation = null;
+
+function ageText(minutes) {
+  if (minutes < 60) return `${Math.round(minutes)} min`;
+  const h = Math.floor(minutes / 60);
+  const m = Math.round(minutes % 60);
+  return m ? `${h} h ${m} m` : `${h} h`;
+}
+
 function renderStatus(observation) {
+  if (observation?.epoch) lastObservation = observation;
+  const box = document.getElementById('status');
   const dot = document.getElementById('status-dot');
   const label = document.getElementById('status-text');
-  if (!observation?.epoch) {
+
+  if (!lastObservation?.epoch) {
+    box.className = 'status down';
     dot.className = 'status-dot';
-    label.textContent = 'no data';
+    label.textContent = 'NO DATA';
     return;
   }
-  const age = (Date.now() - observation.epoch * 1000) / 60000;
-  // The archive commits every ~15 minutes, so anything inside half an hour is
-  // as live as this page can be; a few hours means the station stopped.
-  dot.className = `status-dot ${age <= 30 ? 'live' : age <= 180 ? 'stale' : 'down'}`;
-  label.textContent = age <= 30 ? 'live' : age <= 180 ? 'delayed' : 'offline';
+
+  const age = (Date.now() - lastObservation.epoch * 1000) / 60000;
+  const state = age <= STALE_MIN ? 'live' : age <= OFFLINE_MIN ? 'stale' : 'down';
+
+  // Live stays quiet — a wall display that shouts when everything is fine
+  // trains people to ignore it. Anything else states how stale, in words,
+  // because "delayed" alone does not tell you whether to trust the numbers.
+  box.className = `status ${state}`;
+  dot.className = `status-dot ${state}`;
+  label.textContent = state === 'live' ? 'live' : `${ageText(age)} old`;
 }
 
 function fact(label, value, sub) {
@@ -875,6 +914,10 @@ async function main() {
   }
 
   await show(1);
+
+  // Independent of any fetch: if the network drops, the readings freeze but
+  // the age must not, or the screen keeps insisting it is current.
+  setInterval(() => renderStatus(null), 30_000);
 
   /*
    * Unattended refresh. Nobody is going to walk over and reload the camp

@@ -232,11 +232,66 @@ body {
   .brand-name { flex: 1 1 auto; min-width: 0; }
 }
 
-.status { display: inline-flex; align-items: center; gap: 8px; font-size: .82rem; color: var(--y-gray); font-weight: 700; }
-.status-dot { width: 11px; height: 11px; border-radius: 50%; background: var(--text-muted); flex: none; }
-.status-dot.live { background: var(--good); }
-.status-dot.stale { background: var(--warning); }
-.status-dot.down { background: var(--critical); }
+/*
+ * Staleness, sized for a wall rather than a laptop.
+ *
+ * Live is deliberately quiet: a display that shouts while everything is fine
+ * teaches people to stop looking at it. Delayed and offline become filled
+ * pills, big enough to read from the office doorway, because the question they
+ * answer — "can I trust these numbers right now?" — is the whole reason the
+ * indicator exists.
+ */
+.status {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  font-size: clamp(11px, 1.15vh, 16px);
+  font-weight: 700;
+  letter-spacing: .04em;
+  text-transform: uppercase;
+  color: var(--y-gray);
+  padding: .3em .5em;
+  border-radius: 999px;
+  white-space: nowrap;
+}
+.status-dot {
+  width: clamp(10px, 1.05vh, 15px);
+  height: clamp(10px, 1.05vh, 15px);
+  border-radius: 50%;
+  background: var(--text-muted);
+  flex: none;
+}
+.status.live .status-dot { background: var(--good); }
+
+/* Amber takes black text and red takes white: #fcaf17 has nowhere near enough
+   contrast under white, and this has to stay legible across a room. */
+.status.stale {
+  background: var(--y-orange-light);
+  color: var(--y-black);
+  padding: .3em .85em;
+  font-size: clamp(12px, 1.35vh, 19px);
+}
+.status.stale .status-dot { background: var(--y-orange-dark); }
+
+.status.down {
+  background: var(--y-red);
+  color: var(--y-white);
+  padding: .3em .85em;
+  font-size: clamp(12px, 1.35vh, 19px);
+}
+.status.down .status-dot { background: var(--y-white); }
+
+/* A screen showing hours-old readings should be impossible to walk past. */
+@media (min-width: 1280px) and (min-height: 700px) {
+  .status.down { animation: stale-pulse 2.4s ease-in-out infinite; }
+}
+@keyframes stale-pulse {
+  0%, 100% { opacity: 1; }
+  50%      { opacity: .55; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .status.down { animation: none; }
+}
 
 .ghost-btn {
   font: inherit;
