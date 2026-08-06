@@ -117,7 +117,7 @@ everything else works normally.
 
 ## The scheduled archive
 
-`.github/workflows/archive.yml` runs `archive.mjs` every 15 minutes and
+`.github/workflows/archive.yml` runs `archive.mjs` every 5 minutes and
 commits whatever is new. Each run re-pulls the whole last 24 hours and merges by
 timestamp, so overlapping runs are harmless and a run GitHub drops under load
 costs nothing — the next one catches up.
@@ -130,6 +130,45 @@ Two things to know:
   `backfill_days` input.
 - Scheduled runs are best-effort and often late by several minutes. That's fine
   here, and it's why the archiver pulls a window rather than a single reading.
+
+## Freshness
+
+**Read the `*/5` schedule as a best case, not a promise.**
+
+Four clocks sit between the station and the screen:
+
+| | |
+|---|---|
+| Archiver commits new readings | every 5 min, *if GitHub runs it* |
+| Page re-reads the archive | every 1 min |
+| Radar re-fetches frames | every 5 min |
+| Age label re-ticks | every 30 s, even offline |
+
+So when everything works, the readings are a few minutes old and the page is
+never more than a minute behind the archive. Radar is fresher than the
+readings, because it comes straight from RainViewer rather than through the
+archive — which is the right way round for the thing you would actually act on.
+
+The catch is the first row. GitHub queues scheduled workflows on a best-effort
+basis, deprioritises frequent ones, and drops them under load. **On this repo a
+`*/15` schedule fired exactly once in its first eight hours**; every other
+archive run in that period was triggered by hand. Nothing is wrong with the
+workflow when this happens, and nothing in this repository can fix it.
+
+The design absorbs missed runs — each one re-pulls a 24-hour window — so a gap
+costs no data, only currency. But if the screen must be *reliably* current
+rather than usually current, the trigger has to live somewhere with a real
+scheduler: a machine at camp running `node tools/archive.mjs` on a timer and
+pushing, or an external cron calling the `workflow_dispatch` API. Either
+removes GitHub's scheduler from the critical path.
+
+Because none of that can be guaranteed, the dashboard never claims to be
+current when it isn't. Past 20 minutes the status chip turns amber and states
+the actual age; past 90 minutes it turns red and pulses. It stays quiet while
+things are fine, so that a loud chip means something. The age is driven by its
+own 30-second timer rather than by the data fetch, so it keeps climbing even
+when the page cannot reach GitHub at all — a frozen "2 min ago" would be the
+one genuinely dangerous thing this screen could show.
 
 ## Lightning
 

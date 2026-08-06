@@ -8,10 +8,18 @@ name: Archive
 
 on:
   schedule:
-    # Every 15 minutes. GitHub queues scheduled runs on a best-effort basis and
-    # drops them under load — that's fine here, because each run re-pulls the
-    # whole last 24 hours, so a skipped run costs nothing.
-    - cron: '*/15 * * * *'
+    # Every 5 minutes, which is the finest granularity GitHub accepts.
+    #
+    # Treat this as a best case, not a promise. GitHub queues scheduled runs on
+    # a best-effort basis, deprioritises frequent ones, and drops them under
+    # load: on this repo a */15 schedule fired exactly once in its first eight
+    # hours. Each run re-pulls the whole last 24 hours and merges by timestamp,
+    # so a skipped run costs nothing and the next one catches up — but if the
+    # screen must be reliably current, the trigger has to live somewhere with a
+    # real scheduler rather than here. See "Freshness" in the README.
+    #
+    # Two API calls per run, ~288 runs a day, is well inside the free WU quota.
+    - cron: '*/5 * * * *'
   workflow_dispatch:
     inputs:
       backfill_days:
