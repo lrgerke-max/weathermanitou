@@ -170,6 +170,110 @@ own 30-second timer rather than by the data fetch, so it keeps climbing even
 when the page cannot reach GitHub at all — a frozen "2 min ago" would be the
 one genuinely dangerous thing this screen could show.
 
+## The camp poller
+
+`tools/poller.mjs` is the way off GitHub's scheduler. It is an ordinary
+long-running Node process for a machine that is already on at camp — the box
+driving the screen is ideal — with a real timer instead of a best-effort queue.
+
+```bash
+WU_API_KEY=… node tools/poller.mjs --interval 3 --serve
+```
+
+That polls every 3 minutes, commits and pushes the archive, **and** serves the
+dashboard on `http://localhost:8000/`.
+
+### Point the screen at the poller, not at Pages
+
+`--serve` is the part that actually buys the freshness. With the screen on
+`localhost`, the whole GitHub round trip leaves the critical path — no commit
+wait, no Pages build, no CDN — and the display shows a reading within seconds
+of the poll that fetched it. The push still happens, so the permanent archive
+and the public Pages site stay current; they are just no longer what the wall
+depends on.
+
+Radar still comes from the internet either way.
+
+### One writer
+
+**Turn off the Actions schedule when you run the poller.** Comment out the
+`schedule:` block in `.github/workflows/archive.yml`, or disable the workflow in
+the Actions tab. Two processes committing to `data/` will collide, and while the
+poller recovers from that (it rebases, and rebuilds from origin next cycle if
+the rebase conflicts), there is no reason to make it work for a living. Keep
+`workflow_dispatch` so you can still backfill from the web UI.
+
+### It treats origin as the source of truth
+
+Before each poll the process runs `git reset --hard origin/<branch>`. That is
+deliberate: it means the poller can never diverge from the remote, which is what
+keeps the push path simple enough to trust unattended. The archiver re-pulls a
+full 24-hour window every run, so discarding local `data/` costs nothing recent.
+
+The consequence is that **this checkout is a deployment, not a working copy**.
+Anything you edit there and do not commit will be discarded. The poller refuses
+to run and says so if it finds uncommitted changes outside `data/`, so this
+cannot bite you silently — but do your editing somewhere else.
+
+### Running it as a service
+
+**Windows** — Task Scheduler, which is what the camp office box runs.
+
+1. Create Task → **Run whether user is logged on or not**, **Run with highest
+   privileges** unchecked.
+2. Triggers → New → **At startup**. Tick **Repeat task every 5 minutes** for
+   **Indefinitely** as a watchdog — the process is meant to stay up, and this
+   restarts it if it ever dies.
+3. Actions → New → Start a program:
+   - Program: `C:\Program Files\nodejs\node.exe`
+   - Arguments: `tools\poller.mjs --interval 3 --serve`
+   - Start in: the repository folder
+4. Settings → untick **Stop the task if it runs longer than**, and set
+   **If the task is already running** to **Do not start a new instance**.
+
+Put `WU_API_KEY` (and the Xweather pair, if used) in the machine's environment
+variables, not on the command line — Task Scheduler arguments are readable by
+anyone who can open the task.
+
+**Linux / macOS** — systemd, or `launchd` with `KeepAlive`:
+
+```ini
+# /etc/systemd/system/weather-poller.service
+[Service]
+WorkingDirectory=/opt/weathermanitou
+Environment=WU_API_KEY=…
+ExecStart=/usr/bin/node tools/poller.mjs --interval 3 --serve
+Restart=always
+RestartSec=30
+[Install]
+WantedBy=multi-user.target
+```
+
+### Options
+
+| | |
+|---|---|
+| `--interval N` | minutes between polls (default 3) |
+| `--serve` | serve the dashboard over HTTP as well |
+| `--port N` | port for `--serve` (default 8000) |
+| `--no-push` | archive locally and never push; only sensible with `--serve` |
+| `--once` | one cycle, then exit — for checking the setup |
+
+Start with `--once` to prove the credentials and the git remote work before
+handing it to a scheduler.
+
+### Git credentials
+
+The poller pushes, so the machine needs a credential that can write to the
+repository. A [fine-grained personal access token](https://github.com/settings/tokens?type=beta)
+scoped to this one repository with **Contents: read and write** is the smallest
+thing that works; store it with `git config credential.helper` rather than in
+the remote URL, so it does not end up in `git remote -v` output.
+
+A failed push is not data loss — the archive is rebuilt from WU on the next
+cycle — but it does mean the public Pages site stops updating while the
+`--serve` screen carries on, which is a divergence worth noticing.
+
 ## Lightning
 
 Weather Underground's PWS API carries **no lightning fields at all**, so this
